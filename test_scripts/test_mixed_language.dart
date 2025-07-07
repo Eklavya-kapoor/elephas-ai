@@ -9,7 +9,7 @@ void main() async {
   debugPrint("Testing scam detection on various text samples...");
   debugPrint("-----------------------------------------------");
 
-  final apiUrl = 'http://127.0.0.1:8000/scan'; // Local API endpoint
+  const apiUrl = 'http://127.0.0.1:8000/scan'; // Local API endpoint
 
   // Sample texts to test (including mixed language examples)
   final testTexts = [
