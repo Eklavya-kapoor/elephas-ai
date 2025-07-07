@@ -1,0 +1,63 @@
+name: elephas_ai
+description: Elephas AI - Real-time fraud protection using artificial intelligence
+publish_to: 'none' # Ensures your package isn't accidentally published to pub.dev
+version: 1.0.0+1 # Your application's version and build number
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Defines the compatible Dart SDK range
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core Flutter icons
+  cupertino_icons: ^1.0.2
+
+  # Networking
+  http: ^1.1.0
+
+  # Permission handling
+  permission_handler: ^12.0.0
+
+  # SMS and Call Log access
+  flutter_sms_inbox: ^1.0.2
+  call_log: ^6.0.0
+
+  # Local data storage
+  shared_preferences: ^2.2.2
+
+  # State management
+  provider: ^6.1.1
+
+  # Local notifications
+  flutter_local_notifications: ^19.0.0
+
+  # Launching URLs (e.g., in browser)
+  url_launcher: ^6.2.2
+
+  # Toast messages
+  fluttertoast: ^8.2.12 # Confirmed as latest stable
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0 # Linter rules for code quality
+
+# The "flutter" section is specific to Flutter projects
+flutter:
+  # Ensures that the Material Icons font is included
+  uses-material-design: true
+
+  # Assets section for images and other resources
+  assets:
+    - assets/images/elephas_logo.png
+    - assets/images/elephas_logo_full.png
+    - assets/images/elephas_icon.png
+
+  # To add custom fonts, uncomment the fonts section. Example:
+  # fonts:
+  #   - family: YourCustomFont
+  #     fonts:
+  #       - asset: fonts/YourCustomFont-Regular.ttf
+  #       - asset: fonts/YourCustomFont-Bold.ttf
+  #         weight: 700

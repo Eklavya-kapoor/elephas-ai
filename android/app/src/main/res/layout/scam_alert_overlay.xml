@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlayRoot"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#FFEBEE"
+    android:elevation="8dp">
+
+    <TextView
+        android:id="@+id/alertTitle"
+        android:text="⚠️ SCAM DETECTED"
+        android:textColor="#B71C1C"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/senderText"
+        android:text="From: +1234567890"
+        android:textColor="#000"
+        android:textSize="14sp"
+        android:layout_marginTop="8dp" />
+
+    <TextView
+        android:id="@+id/messageText"
+        android:text="Scam content goes here..."
+        android:textColor="#000"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp" />
+
+    <TextView
+        android:id="@+id/riskLevel"
+        android:text="Risk: HIGH"
+        android:textColor="#D32F2F"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/dismissButton"
+            android:text="Dismiss" />
+
+        <Button
+            android:id="@+id/blockButton"
+            android:text="Block"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>
