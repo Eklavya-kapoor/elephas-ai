@@ -70,8 +70,6 @@ Configure the system using environment variables or the config.json file:
 
 ## 🏢 Enterprise Dashboard
 
-Access the premium enterprise dashboard at http://localhost:8000/ featuring:
-
 - Real-time threat monitoring
 - Analytics and reporting
 - System health monitoring
