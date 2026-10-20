@@ -1,6 +1,6 @@
 # 🐘 Elephas AI - Enterprise Security API
 
-Enterprise-grade AI-powered threat detection and scam prevention platform.
+Enterprise grade AI-powered threat detection and scam prevention platform.
 
 Elephas AI provides real-time analysis of messages, emails, URLs, and communications to detect and prevent scams, phishing attempts, and malicious content using advanced machine learning and natural language processing.
 
