@@ -4,6 +4,22 @@ Enterprise-grade AI-powered threat detection and scam prevention platform.
 
 Elephas AI provides real-time analysis of messages, emails, URLs, and communications to detect and prevent scams, phishing attempts, and malicious content using advanced machine learning and natural language processing.
 
+## 🎬 Product Demo Video
+
+<p align="center">
+	<img src="assets/images/overlay.png" alt="Elephas AI demo preview" width="720" />
+</p>
+
+<p align="center">
+	<a href="assets/demo/elephas-ai-demo.mp4"><strong>▶ Watch Elephas AI Product Demo</strong></a>
+</p>
+
+To publish the demo in GitHub README, add your video file at:
+
+- assets/demo/elephas-ai-demo.mp4
+
+Or replace the link above with your hosted video URL (YouTube, Loom, or Vimeo).
+
 ## 🌟 Features
 
 - 🧠 AI-Powered Detection: Advanced BERT-based classification for scam detection
