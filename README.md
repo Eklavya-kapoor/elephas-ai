@@ -14,11 +14,6 @@ Elephas AI provides real-time analysis of messages, emails, URLs, and communicat
 	<a href="assets/demo/elephas-ai-demo.mp4"><strong>▶ Watch Elephas AI Product Demo</strong></a>
 </p>
 
-To publish the demo in GitHub README, add your video file at:
-
-- assets/demo/elephas-ai-demo.mp4
-
-Or replace the link above with your hosted video URL (YouTube, Loom, or Vimeo).
 
 ## 🌟 Features
 
@@ -67,7 +62,7 @@ python main.py
 
 import requests
 
-response = requests.post("http://localhost:8000/scan", json={
+json={
 	"text": "Your message or content here",
 	"sender": "optional-sender-info"
 })
