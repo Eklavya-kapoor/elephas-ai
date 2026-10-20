@@ -1,21 +1,20 @@
 // lib/screens/custom_rules_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/scam_detection_service.dart';
+import '../services/scam_detection_service.dart'; // Enhanced Elephas AI
 
 class CustomRule {
   String pattern;
   String description;
   bool isEnabled;
   bool isRegex;
-  
-  CustomRule({
-    required this.pattern, 
-    required this.description, 
-    this.isEnabled = true, 
-    this.isRegex = false
-  });
-  
+
+  CustomRule(
+      {required this.pattern,
+      required this.description,
+      this.isEnabled = true,
+      this.isRegex = false});
+
   // Convert to Map for storage in ScamDetectionService
   Map<String, dynamic> toMap() {
     return {
@@ -25,7 +24,7 @@ class CustomRule {
       'isRegex': isRegex,
     };
   }
-  
+
   // Create from Map stored in ScamDetectionService
   factory CustomRule.fromMap(Map<String, dynamic> map) {
     return CustomRule(
@@ -81,7 +80,9 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
           : ListView.builder(
               itemCount: _rules.length,
               itemBuilder: (context, index) {
-                final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
+                final scamService = Provider.of<SmartScamDetectionService>(
+                    context,
+                    listen: false);
                 return _buildRuleItem(_rules[index], index, scamService);
               },
             ),
@@ -119,7 +120,8 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
     );
   }
 
-  Widget _buildRuleItem(CustomRule rule, int index, SmartScamDetectionService scamService) {
+  Widget _buildRuleItem(
+      CustomRule rule, int index, SmartScamDetectionService scamService) {
     return Dismissible(
       key: Key('rule_$index'),
       background: Container(
@@ -137,9 +139,10 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
           _rules.removeAt(index);
         });
         // Update the service
-        final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
-        scamService.removeCustomRule(index);
-        
+        final scamService =
+            Provider.of<SmartScamDetectionService>(context, listen: false);
+        scamService.removeCustomRule(_rules[index].pattern);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Rule deleted'),
@@ -149,7 +152,11 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
                 setState(() {
                   _rules.insert(index, rule);
                 });
-                scamService.addCustomRule(rule.toMap());
+                scamService.addCustomRule({
+                  'pattern': rule.pattern,
+                  'description': rule.description,
+                  'isEnabled': rule.isEnabled,
+                });
               },
             ),
           ),
@@ -180,8 +187,10 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
                 rule.isEnabled = value;
               });
               // Update in service
-              final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
-              scamService.updateCustomRule(index, rule.toMap());
+              final scamService = Provider.of<SmartScamDetectionService>(
+                  context,
+                  listen: false);
+              scamService.updateCustomRule(rule.pattern, rule.toMap());
             },
           ),
           onTap: () => _showEditRuleDialog(context, rule, index),
@@ -255,15 +264,17 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
                           : 'Custom rule',
                       isRegex: isRegex,
                     );
-                    
+
                     setState(() {
                       _rules.add(newRule);
                     });
-                    
+
                     // Add to service
-                    final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
+                    final scamService = Provider.of<SmartScamDetectionService>(
+                        context,
+                        listen: false);
                     scamService.addCustomRule(newRule.toMap());
-                    
+
                     Navigator.of(context).pop();
                   },
                   child: const Text('ADD'),
@@ -337,11 +348,13 @@ class CustomRulesScreenState extends State<CustomRulesScreen> {
                       rule.description = descriptionController.text;
                       rule.isRegex = isRegex;
                     });
-                    
+
                     // Update in service
-                    final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
-                    scamService.updateCustomRule(index, rule.toMap());
-                    
+                    final scamService = Provider.of<SmartScamDetectionService>(
+                        context,
+                        listen: false);
+                    scamService.updateCustomRule(rule.pattern, rule.toMap());
+
                     Navigator.of(context).pop();
                   },
                   child: const Text('SAVE'),

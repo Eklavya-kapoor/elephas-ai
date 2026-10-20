@@ -1,0 +1,483 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/permissions_service.dart';
+import '../services/elephas_main_service.dart';
+import 'main_screen.dart';
+
+class ModernPermissionsScreen extends StatefulWidget {
+  const ModernPermissionsScreen({super.key});
+
+  @override
+  State<ModernPermissionsScreen> createState() =>
+      _ModernPermissionsScreenState();
+}
+
+class _ModernPermissionsScreenState extends State<ModernPermissionsScreen>
+    with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  String _protectionLevel = 'CHECKING...';
+  bool _isLoading = true;
+  bool _isGrantingPermissions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+
+    _checkPermissions();
+    _fadeController.forward();
+    _slideController.forward();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _slideController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkPermissions() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await PermissionsService.checkAllPermissions();
+      await PermissionsService.checkSpecialPermissions();
+      final protectionLevel = await PermissionsService.getProtectionLevel();
+
+      setState(() {
+        _protectionLevel = protectionLevel;
+        _isLoading = false;
+      });
+
+      // Auto-navigate if all permissions are granted
+      if (_protectionLevel == 'EXCELLENT PROTECTION' ||
+          _protectionLevel == 'GOOD PROTECTION') {
+        _navigateToMain();
+      }
+    } catch (e) {
+      debugPrint('Error checking permissions: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _requestAllPermissions() async {
+    setState(() {
+      _isGrantingPermissions = true;
+    });
+
+    try {
+      await PermissionsService.requestAllPermissions();
+      await _checkPermissions();
+    } catch (e) {
+      debugPrint('Error requesting permissions: $e');
+    } finally {
+      setState(() {
+        _isGrantingPermissions = false;
+      });
+    }
+  }
+
+  void _navigateToMain() {
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+
+      // Get service reference before async operations
+      final elephasService =
+          Provider.of<ElephasMainService>(context, listen: false);
+
+      // Start Elephas AI protection before navigating
+      try {
+        await elephasService.initializeWithServices(context);
+        await elephasService.startProtection();
+        debugPrint('🟢 [PermissionsScreen] Elephas AI protection started');
+      } catch (e) {
+        debugPrint('⚠️ [PermissionsScreen] Error starting protection: $e');
+        return; // Don't navigate if protection failed to start
+      }
+
+      // Check mounted again after async operations
+      if (!mounted) return;
+
+      debugPrint('🟢 [PermissionsScreen] Navigating to main app');
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const MainScreen(),
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    });
+  }
+
+  Color _getProtectionColor() {
+    switch (_protectionLevel) {
+      case 'EXCELLENT PROTECTION':
+        return const Color(0xFF10B981);
+      case 'GOOD PROTECTION':
+        return const Color(0xFF3B82F6);
+      case 'BASIC PROTECTION':
+        return const Color(0xFFF59E0B);
+      default:
+        return const Color(0xFFEF4444);
+    }
+  }
+
+  IconData _getProtectionIcon() {
+    switch (_protectionLevel) {
+      case 'EXCELLENT PROTECTION':
+        return Icons.verified_user;
+      case 'GOOD PROTECTION':
+        return Icons.shield;
+      case 'BASIC PROTECTION':
+        return Icons.shield_outlined;
+      default:
+        return Icons.error_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF4F46E5),
+              Color(0xFF7C3AED),
+              Color(0xFF9333EA),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 40),
+
+                    // Header
+                    Column(
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha((0.2 * 255).round()),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withAlpha((0.3 * 255).round()),
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.security,
+                            size: 60,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Welcome to Elephas AI',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Advanced AI-powered scam protection',
+                          style: TextStyle(
+                            color: Colors.white.withAlpha((0.9 * 255).round()),
+                            fontSize: 18,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 60),
+
+                    // Permission Status Card
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha((0.1 * 255).round()),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Column(
+                            children: [
+                              // Protection Level Indicator
+                              if (!_isLoading) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        _getProtectionColor().withAlpha((0.1 * 255).round()),
+                                    borderRadius: BorderRadius.circular(50),
+                                    border: Border.all(
+                                      color: _getProtectionColor()
+                                          .withAlpha((0.3 * 255).round()),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _getProtectionIcon(),
+                                        color: _getProtectionColor(),
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _protectionLevel,
+                                        style: TextStyle(
+                                          color: _getProtectionColor(),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 32),
+                              ],
+
+                              // Protection Features
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'Elephas AI Protection Features',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Expanded(
+                                      child: ListView(
+                                        children: [
+                                          _buildFeatureItem(
+                                            icon: Icons.message_outlined,
+                                            title: 'Smart Message Analysis',
+                                            description:
+                                                'AI-powered detection of scam messages',
+                                            isEnabled: true,
+                                          ),
+                                          _buildFeatureItem(
+                                            icon: Icons
+                                                .notifications_active_outlined,
+                                            title: 'Real-time Alerts',
+                                            description:
+                                                'Instant notifications for threats',
+                                            isEnabled: true,
+                                          ),
+                                          _buildFeatureItem(
+                                            icon: Icons.history,
+                                            title: 'Protection History',
+                                            description:
+                                                'Track and review all security events',
+                                            isEnabled: true,
+                                          ),
+                                          _buildFeatureItem(
+                                            icon: Icons.psychology_outlined,
+                                            title: 'Zero False Positives',
+                                            description:
+                                                'Advanced AI ensures accuracy',
+                                            isEnabled: true,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Action Button
+                              const SizedBox(height: 20),
+                              if (_protectionLevel == 'EXCELLENT PROTECTION' ||
+                                  _protectionLevel == 'GOOD PROTECTION')
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56,
+                                  child: ElevatedButton(
+                                    onPressed: _navigateToMain,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF10B981),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text(
+                                      'Continue to Protection',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56,
+                                  child: ElevatedButton(
+                                    onPressed: _isGrantingPermissions
+                                        ? null
+                                        : _requestAllPermissions,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: _isGrantingPermissions
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Enable Full Protection',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                              const SizedBox(height: 16),
+                              Text(
+                                'Messaging app monitoring only • No call monitoring',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem({
+    required IconData icon,
+    required String title,
+    required String description,
+    required bool isEnabled,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: isEnabled
+                  ? const Color(0xFF10B981).withAlpha((0.1 * 255).round())
+                  : Colors.grey.withAlpha((0.1 * 255).round()),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: isEnabled ? const Color(0xFF10B981) : Colors.grey,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

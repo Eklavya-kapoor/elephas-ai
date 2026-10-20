@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Premium dismiss button with ripple effect -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#40FFFFFF">
+    
+    <item>
+        <layer-list>
+            <!-- Shadow -->
+            <item android:top="1dp" android:left="1dp">
+                <shape android:shape="oval">
+                    <solid android:color="#40000000" />
+                </shape>
+            </item>
+            
+            <!-- Main button background -->
+            <item android:bottom="1dp" android:right="1dp">
+                <shape android:shape="oval">
+                    <!-- Semi-transparent background with gradient -->
+                    <gradient
+                        android:startColor="#50FFFFFF"
+                        android:endColor="#30FFFFFF"
+                        android:angle="135" />
+                    
+                    <!-- Subtle border -->
+                    <stroke
+                        android:width="1dp"
+                        android:color="#80FFFFFF" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+</ripple>

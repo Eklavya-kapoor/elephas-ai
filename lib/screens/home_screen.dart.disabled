@@ -1,0 +1,219 @@
+// lib/screens/home_screen.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:elephas_ai/services/scam_detection_service.dart';
+import 'package:elephas_ai/services/sms_monitor_service.dart';
+import 'package:elephas_ai/services/call_monitor_service.dart';
+import 'package:elephas_ai/services/overlay_service.dart';
+import 'package:elephas_ai/widgets/protection_status_card.dart';
+import 'package:elephas_ai/widgets/quick_scan_card.dart';
+import 'package:elephas_ai/widgets/stats_card.dart';
+import 'package:elephas_ai/screens/permissions_screen.dart';
+
+// FIX: Change StatelessWidget to StatefulWidget
+class HomeScreen extends StatefulWidget {
+  const HomeScreen(
+      {super.key}); // Keep this const if the constructor of HomeScreen itself is const
+
+  @override
+  // This is correct for a StatefulWidget
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) {
+        final smsService =
+            Provider.of<SmsMonitorService>(context, listen: false);
+        final callService =
+            Provider.of<CallMonitorService>(context, listen: false);
+        final detectionService =
+            Provider.of<SmartScamDetectionService>(context, listen: false);
+        final overlayService =
+            Provider.of<OverlayService>(context, listen: false);
+        smsService.startMonitoring(detectionService, overlayService);
+        callService.startMonitoring();
+        // Overlay permission check at startup
+        await overlayService.checkAndRequestOverlayPermission(context);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        // FIX: Remove const from AppBar title if it's dynamic (like Text('Elephas AI'))
+        // If it's static, you can keep const Text('Elephas AI')
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/images/elephas_icon.png',
+              height: 24,
+              width: 24,
+            ),
+            const SizedBox(width: 8),
+            const Text('Elephas AI'),
+          ],
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.security),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PermissionsScreen(),
+                ),
+              );
+            },
+            tooltip: 'Permissions',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16), // Added const
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Now we can use const since we've added a const constructor
+            const ProtectionStatusCard(),
+            const SizedBox(height: 16), // This can remain const
+            // Using const here improves performance since QuickScanCard has a const constructor
+            const QuickScanCard(),
+            const SizedBox(height: 16), // This can remain const
+            Text(
+              // This cannot be const because it depends on Theme.of(context)
+              'Protection Statistics',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 12), // This can remain const
+            // Ensure SmsMonitorService and CallMonitorService are provided in your app's widget tree
+            Consumer2<SmsMonitorService, CallMonitorService>(
+              builder: (context, smsService, callService, child) {
+                // FIX: This Column cannot be const because its children (Rows) are not const.
+                return Column(
+                  children: [
+                    // FIX: This Row cannot be const because its children (Expanded/StatsCard) are not const. (Error on line 59 likely points here due to its children)
+                    Row(
+                      children: [
+                        Expanded(
+                          // Expanded cannot be const
+                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
+                          child: StatsCard(
+                            title: 'SMS Scanned',
+                            value: smsService.totalSmsScanned
+                                .toString(), // Dynamic value
+                            icon: Icons.message,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(width: 12), // This can remain const
+                        Expanded(
+                          // Expanded cannot be const
+                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
+                          child: StatsCard(
+                            title: 'Scams Blocked',
+                            value: smsService.scamsBlocked
+                                .toString(), // Dynamic value
+                            icon: Icons.block,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12), // This can remain const
+                    // FIX: This Row cannot be const because its children (Expanded/StatsCard) are not const.
+                    Row(
+                      children: [
+                        Expanded(
+                          // Expanded cannot be const
+                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
+                          child: StatsCard(
+                            title: 'Calls Monitored',
+                            value: callService.totalCallsScanned
+                                .toString(), // Dynamic value
+                            icon: Icons.phone,
+                            color: Colors.green,
+                          ),
+                        ),
+                        const SizedBox(width: 12), // This can remain const
+                        Expanded(
+                          // Expanded cannot be const
+                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
+                          child: StatsCard(
+                            title: 'Suspicious Calls',
+                            value: callService.suspiciousCalls
+                                .toString(), // Dynamic value
+                            icon: Icons.warning,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            // TEST: Add overlay test button
+            Center(
+              child: Column(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      debugPrint('🧪 TEST: Testing simple overlay...');
+                      final overlayService =
+                          Provider.of<OverlayService>(context, listen: false);
+                      await overlayService
+                          .testShowOverlayWithPermission(context);
+                    },
+                    icon: const Icon(Icons.bug_report),
+                    label: const Text('TEST OVERLAY'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      debugPrint('🧪 TEST: Testing complete scam flow...');
+                      final overlayService =
+                          Provider.of<OverlayService>(context, listen: false);
+                      await overlayService.testCompleteScamFlow();
+                    },
+                    icon: const Icon(Icons.security),
+                    label: const Text('TEST SCAM FLOW'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          debugPrint('🧪 FAB: Testing simple overlay...');
+          final overlayService =
+              Provider.of<OverlayService>(context, listen: false);
+          await overlayService.testShowOverlayWithPermission(context);
+        },
+        tooltip: 'Test Overlay',
+        backgroundColor: Colors.purple,
+        child: const Icon(Icons.bug_report),
+      ),
+    );
+  }
+}

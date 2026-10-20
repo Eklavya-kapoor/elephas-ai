@@ -1,0 +1,247 @@
+// ignore_for_file: avoid_print
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+// Models
+import '../models/alert_config.dart' as alert;
+import '../models/app_activity.dart';
+import '../models/detection_result.dart';
+import '../models/protection_models.dart';
+
+// Services
+import '../services/channel_monitor.dart';
+import '../services/contact_intelligence.dart';
+import '../services/context_analyzer.dart';
+import '../services/detector.dart';
+
+/// Core service for intelligent scam detection and protection
+/// Handles message analysis, alerting, and performance tracking
+class IntelligentProtectionService with ChangeNotifier {
+  final String _backendUrl = 'http://172.20.10.7:8000';
+  final String _logTag = 'IntelligentProtection';
+  
+  // Core services
+  late final ContactIntelligenceService _contactIntelligence;
+  late final ConversationContextAnalyzer _contextAnalyzer;
+  late final ZeroFalsePositiveDetector _detector;
+  late final ChannelSpecificMonitor _channelMonitor;
+  final http.Client _client = http.Client();
+
+  // State tracking
+  bool _isInitialized = false;
+  bool _isProtectionActive = false;
+  DateTime? _serviceStartTime;
+  
+  // Alert management
+  late final alert.AlertConfig _alertConfig;
+  Timer? _alertLimitResetTimer;
+  DateTime? _lastAlertTime;
+  int _alertsThisHour = 0;
+  
+  // Performance tracking
+  int _totalScansPerformed = 0;
+  int _threatsDetected = 0;
+  int _falsePositivesAvoided = 0;
+  final List<DateTime> _recentAlerts = [];
+  final _alertController = StreamController<DetectionResult>.broadcast();
+  final _statsController = StreamController<Map<String, dynamic>>.broadcast();
+
+  // Stream getters
+  Stream<DetectionResult> get alertStream => _alertController.stream;
+  Stream<Map<String, dynamic>> get statsStream => _statsController.stream;
+  bool get isActive => _isProtectionActive;
+
+  IntelligentProtectionService() {
+    _alertConfig = alert.AlertConfig(
+      maxAlertsPerHour: 10,
+      minTimeBetweenAlerts: const Duration(seconds: 30),
+      enableVibration: true,
+      enableSound: true,
+      enableToast: true,
+    );
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    if (_isInitialized) return;
+
+    developer.log(
+      'Creating IntelligentProtectionService',
+      name: _logTag,
+      level: 1,
+    );
+    
+    _contactIntelligence = ContactIntelligenceService();
+    _contextAnalyzer = ConversationContextAnalyzer();
+    _detector = ZeroFalsePositiveDetector();
+    _channelMonitor = ChannelSpecificMonitor();
+    
+    _setupAlertLimitReset();
+    _isInitialized = true;
+    _serviceStartTime = DateTime.now();
+
+    notifyListeners();
+  }
+
+  void _setupAlertLimitReset() {
+    _alertLimitResetTimer?.cancel();
+    _alertLimitResetTimer = Timer.periodic(
+      const Duration(hours: 1),
+      (_) => _resetAlertLimits(),
+    );
+  }
+
+  void _resetAlertLimits() {
+    _alertsThisHour = 0;
+    _recentAlerts.clear();
+    _emitStats();
+  }
+
+  void _emitStats() {
+    if (!_statsController.isClosed) {
+      _statsController.add(getPerformanceMetrics());
+    }
+  }
+
+  Future<void> startProtection() async {
+    await _ensureInitialized();
+    if (_isProtectionActive) return;
+
+    _isProtectionActive = true;
+    _serviceStartTime = DateTime.now();
+    _resetAlertLimits();
+    
+    notifyListeners();
+    developer.log(
+      'Protection started',
+      name: _logTag,
+      level: 1,
+    );
+  }
+
+  Future<void> stopProtection() async {
+    if (!_isProtectionActive) return;
+    
+    _isProtectionActive = false;
+    _alertLimitResetTimer?.cancel();
+    
+    notifyListeners();
+    developer.log(
+      'Protection stopped',
+      name: _logTag,
+      level: 1,
+    );
+  }
+
+  Future<bool> _ensureInitialized() async {
+    if (!_isInitialized) {
+      await _initialize();
+    }
+    return _isInitialized;
+  }
+
+  Map<String, dynamic> getPerformanceMetrics() {
+    if (!_isInitialized) return {};
+    
+    final uptime = DateTime.now().difference(_serviceStartTime ?? DateTime.now());
+    
+    return {
+      'uptime': uptime.inMilliseconds,
+      'uptimeMinutes': uptime.inMinutes,
+      'scansPerMinute': uptime.inMinutes > 0
+          ? _totalScansPerformed / uptime.inMinutes
+          : 0.0,
+      'totalScans': _totalScansPerformed,
+      'threatsDetected': _threatsDetected,
+      'falsePositivesAvoided': _falsePositivesAvoided,
+      'recentAlerts': _recentAlerts.length,
+    };
+  }
+
+  Future<bool> analyzeMessage({
+    required String message,
+    required String contactId,
+    required String app,
+    String? messageType,
+  }) async {
+    if (!_isProtectionActive || message.isEmpty) {
+      return false;
+    }
+
+    _totalScansPerformed++;
+    _emitStats();
+
+    try {
+      final result = await _detector.analyze(
+        message: message,
+        context: {
+          'app': app,
+          'messageType': messageType,
+          'contactTrust': await _contactIntelligence.getTrustScore(contactId),
+          'contactHistory': await _contactIntelligence.getContactHistory(contactId),
+          'conversationContext': _contextAnalyzer.getContextForContact(contactId),
+        },
+      );
+
+      if (!result.isScam) {
+        _falsePositivesAvoided++;
+        _emitStats();
+        return false;
+      }
+
+      if (_shouldShowAlert()) {
+        _alertsThisHour++;
+        _lastAlertTime = DateTime.now();
+        _recentAlerts.add(_lastAlertTime!);
+        _threatsDetected++;
+        
+        _alertController.add(result);
+        _emitStats();
+        
+        return true;
+      }
+
+    } catch (e) {
+      developer.log(
+        'Error analyzing message',
+        error: e,
+        name: _logTag,
+        level: 0,
+      );
+    }
+
+    return false;
+  }
+
+  bool _shouldShowAlert() {
+    if (_alertsThisHour >= _alertConfig.maxAlertsPerHour) {
+      return false;
+    }
+
+    if (_lastAlertTime != null) {
+      final timeSinceLastAlert = DateTime.now().difference(_lastAlertTime!);
+      if (timeSinceLastAlert < _alertConfig.minTimeBetweenAlerts) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  List<MonitoredAppInfo> getMonitoredAppsInfo() {
+    return _channelMonitor.getMonitoredApps();
+  }
+
+  @override
+  void dispose() {
+    _alertLimitResetTimer?.cancel();
+    _statsController.close();
+    _alertController.close();
+    _client.close();
+    super.dispose();
+  }
+}

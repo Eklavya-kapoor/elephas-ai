@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext traffic for local network testing with backend server -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Primary backend server -->
+        <domain includeSubdomains="true">192.168.0.103</domain>
+        <!-- Local development -->
+        <domain includeSubdomains="true">192.168.0.106</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <!-- Android emulator -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- Entire local network -->
+        <domain includeSubdomains="true">192.168.0.0/16</domain>
+    </domain-config>
+</network-security-config>

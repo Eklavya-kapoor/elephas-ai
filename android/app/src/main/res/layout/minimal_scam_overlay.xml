@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AMAZING Premium curved red scam alert overlay with animations -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/minimalOverlayRoot"
+    android:orientation="horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/amazing_curved_red_background"
+    android:elevation="40dp"
+    android:paddingLeft="20dp"
+    android:paddingRight="20dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="16dp"
+    android:gravity="center_vertical"
+    android:animateLayoutChanges="true"
+    android:clipToPadding="false">
+
+    <!-- Premium Elephas AI Logo with glow effect -->
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp">
+        
+        <!-- Glow effect behind logo -->
+        <ImageView
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/logo_glow_effect"
+            android:layout_gravity="center" />
+        
+        <!-- Main logo -->
+        <ImageView
+            android:id="@+id/elephasLogo"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/elephas_logo_curved"
+            android:scaleType="fitCenter"
+            android:background="@drawable/premium_logo_circle_background"
+            android:padding="3dp"
+            android:layout_gravity="center" />
+            
+    </FrameLayout>
+
+    <!-- Brand Name and Warning with premium typography -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <!-- Premium Brand Name with shadow -->
+        <TextView
+            android:id="@+id/brandName"
+            android:text="ELEPHAS AI"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:fontFamily="@font/inter_bold"
+            android:letterSpacing="0.1"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="2" />
+
+        <!-- Premium Warning Text with animation-ready styling -->
+        <TextView
+            android:id="@+id/warningText"
+            android:text="⚠️ Beware, this looks like a scam"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:fontFamily="@font/inter_bold"
+            android:layout_marginTop="3dp"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="2" />
+
+    </LinearLayout>
+
+    <!-- Premium animated dismiss button -->
+    <FrameLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+        
+        <!-- Button background with ripple effect -->
+        <TextView
+            android:id="@+id/dismissButton"
+            android:text="✕"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:background="@drawable/premium_dismiss_circle"
+            android:gravity="center"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
+            
+    </FrameLayout>
+
+</LinearLayout>

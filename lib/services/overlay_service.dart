@@ -1,180 +1,159 @@
 // lib/services/overlay_service.dart
-import 'package:flutter/material.dart'; // For @required and debugPrint, etc.
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/foundation.dart'; // IMPORTANT: Add this import
 
-// Make OverlayService extend ChangeNotifier
 class OverlayService extends ChangeNotifier {
-  static const MethodChannel _overlayChannel =
-      MethodChannel('elephas_ai/overlay');
-  static const MethodChannel _notificationChannel =
-      MethodChannel('elephas_ai/notifications');
-
+  static const MethodChannel _overlayChannel = MethodChannel('elephas_ai/overlay');
+  
   bool _isInitialized = false;
-  bool _isVisible = false;
+  bool _isShowingAlert = false;
+  String _currentApp = '';
 
-  bool get isInitialized => _isInitialized;
-  bool get isVisible => _isVisible;
+  // Duration for alert display
+  static const Duration alertDuration = Duration(seconds: 10);
+  Timer? _hideTimer;
 
-  // Constructor (optional, but good for initialization)
   OverlayService() {
-    _initMethodCallHandler();
+    debugPrint('🟢 [OverlayService] CONSTRUCTOR called: ${identityHashCode(this)}');
   }
 
+  /// Initialize the overlay service
   void initialize() {
-    debugPrint("OverlayService Initialized");
-    // Any other setup logic that needs to run on init
+    debugPrint('🟢 [OverlayService] INITIALIZE called: ${identityHashCode(this)}');
+    _isInitialized = true;
   }
 
-  // Handle incoming method calls from the native side
-  void _initMethodCallHandler() {
-    _overlayChannel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'onScamDetected':
-          final String? message = call.arguments['message'];
-          final String? detectedType = call.arguments['detectedType'];
-          final String? scamNumber =
-              call.arguments['scamNumber']; // For calls/SMS
-          debugPrint(
-              'Native: Scam Detected! Type: $detectedType, Message: $message, Number: $scamNumber');
-          // You might want to update some state here and notify listeners
-          // For now, let's just show the overlay
-          await showScamOverlay(
-              message ?? 'Unknown scam detected!',
-              detectedType ?? 'unknown',
-              scamNumber != null ? {'scamNumber': scamNumber} : null);
-          break;
-        case 'onNotificationIntercepted':
-          final String? packageName = call.arguments['packageName'];
-          final String? title = call.arguments['title'];
-          final String? text = call.arguments['text'];
-          debugPrint(
-              'Native: Notification Intercepted! Package: $packageName, Title: $title, Text: $text');
-          // Process notification for scams, then potentially show overlay
-          // For simplicity, let's just show a toast for now
-          Fluttertoast.showToast(
-              msg: "Notification Intercepted: $title - $text");
-          break;
-        case 'onIncomingSms':
-          final String? sender = call.arguments['sender'];
-          final String? messageBody = call.arguments['messageBody'];
-          debugPrint(
-              'Native: Incoming SMS! Sender: $sender, Message: $messageBody');
-          // Process SMS for scams, then potentially show overlay
-          Fluttertoast.showToast(msg: "New SMS from $sender: $messageBody");
-          break;
-        case 'onIncomingCall':
-          final String? phoneNumber = call.arguments['phoneNumber'];
-          final int? callState =
-              call.arguments['callState']; // 1=RINGING, 2=OFFHOOK, 0=IDLE
-          debugPrint(
-              'Native: Incoming Call! Number: $phoneNumber, State: $callState');
-          // Process call for scams, then potentially show overlay
-          Fluttertoast.showToast(
-              msg: "Incoming call from $phoneNumber (State: $callState)");
-          break;
-        default:
-          debugPrint('Unknown method: ${call.method}');
+  /// Set the current active app package name
+  void setCurrentApp(String packageName) {
+    if (_currentApp != packageName) {
+      _currentApp = packageName;
+      // Hide any existing alert when app changes
+      if (_isShowingAlert) {
+        hideAlert();
       }
-    });
-  }
-
-  Future<void> initializeService() async {
-    try {
-      await _overlayChannel.invokeMethod('initialize');
-      _isInitialized = true;
       notifyListeners();
-      debugPrint('Overlay service initialized.');
-    } on PlatformException catch (e) {
-      debugPrint("Failed to initialize overlay service: '${e.message}'.");
-      Fluttertoast.showToast(
-          msg: "Error initializing overlay service: ${e.message}");
     }
   }
 
-  Future<void> showScamOverlay(String message, String? alertType,
-      Map<String, dynamic>? extraData) async {
+  /// Get the current active app package name
+  String getCurrentApp() => _currentApp;
+
+  /// Show alert overlay
+  Future<void> showScamOverlay(String title, String severity, Map<String, String> data) async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ OverlayService not initialized!');
+      return;
+    }
+
+    // If another alert is showing, hide it and cancel its timer
+    if (_isShowingAlert) {
+      _hideTimer?.cancel();
+      await hideAlert();
+      // Small delay to ensure smooth transition
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // Show appropriate image based on whether URL is present
+    final alertType = data['containsUrl'] == 'true' ? 'url' : 'scam';
+    
     try {
-      final Map<String, dynamic> params = {
-        'message': message,
-        'alertType': alertType ?? 'unknown',
-      };
+      _isShowingAlert = true;
+      
+      final bool success = await _overlayChannel.invokeMethod('showOverlay', {
+        'title': title,
+        'severity': severity,
+        'data': data,
+        'alertType': alertType,
+      });
 
-      if (extraData != null) {
-        params.addAll(extraData);
+      if (!success) {
+        debugPrint('❌ Failed to show overlay');
+        _isShowingAlert = false;
+      } else {
+        // Start timer to auto-hide after duration
+        _hideTimer?.cancel();
+        _hideTimer = Timer(alertDuration, () async {
+          await hideAlert();
+        });
       }
-
-      await _overlayChannel.invokeMethod('showOverlay', params);
-      _isVisible = true;
-      notifyListeners();
-      debugPrint('Overlay shown successfully.');
-    } on PlatformException catch (e) {
-      debugPrint("Failed to show overlay: '${e.message}'.");
-      Fluttertoast.showToast(msg: "Error showing overlay: ${e.message}");
+    } catch (e) {
+      debugPrint('❌ Error showing overlay: $e');
+      _isShowingAlert = false;
     }
   }
 
-  Future<void> hideScamOverlay() async {
+  /// Hide any currently showing alert
+  Future<void> hideAlert() async {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    
     try {
       await _overlayChannel.invokeMethod('hideOverlay');
-      _isVisible = false;
-      notifyListeners();
-      debugPrint('Overlay hidden successfully.');
-    } on PlatformException catch (e) {
-      debugPrint("Failed to hide overlay: '${e.message}'.");
+      _isShowingAlert = false;
+    } catch (e) {
+      debugPrint('❌ Error hiding alert: $e');
     }
   }
 
-  // Permission checks and requests
-  Future<bool> hasOverlayPermission() async {
-    final status = await Permission.systemAlertWindow.status;
-    return status.isGranted;
+  /// Check and request overlay permission if needed
+  Future<bool> checkAndRequestOverlayPermission() async {
+    if (!await Permission.systemAlertWindow.isGranted) {
+      debugPrint('🔒 Requesting overlay permission...');
+      final status = await Permission.systemAlertWindow.request();
+      return status.isGranted;
+    }
+    return true;
   }
 
-  Future<void> openDrawOverlaysSettings() async {
-    try {
-      await _overlayChannel.invokeMethod('openDrawOverlaysSettings');
-    } on PlatformException catch (e) {
-      debugPrint("Failed to open overlay settings: '${e.message}'.");
-      // Fallback for older Android versions or if method fails
-      if (await canLaunchUrl(Uri.parse('package:com.android.settings'))) {
-        launchUrl(Uri.parse('package:com.android.settings'));
-      }
+  /// Test method to verify overlay functionality
+  Future<void> testCompleteScamFlow() async {
+    if (await checkAndRequestOverlayPermission()) {
+      // Test regular scam alert
+      await showScamOverlay(
+        'Test Scam Alert',
+        'HIGH_RISK',
+        {
+          'severity': 'HIGH_RISK',
+          'containsUrl': 'false',
+        },
+      );
+
+      // Wait between alerts
+      await Future.delayed(const Duration(seconds: 3));
+
+      // Test URL warning
+      await showScamOverlay(
+        'Test URL Warning',
+        'HIGH_RISK',
+        {
+          'severity': 'HIGH_RISK',
+          'containsUrl': 'true',
+        },
+      );
+    } else {
+      debugPrint('⚠️ Cannot test - overlay permission not granted');
     }
   }
 
-  Future<bool> hasNotificationAccess() async {
-    try {
-      final bool hasAccess =
-          await _notificationChannel.invokeMethod('hasNotificationAccess');
-      return hasAccess;
-    } on PlatformException catch (e) {
-      debugPrint("Failed to check notification access: '${e.message}'.");
-      return false;
+  /// Test method to show a simple overlay after checking permissions
+  Future<void> testShowOverlayWithPermission() async {
+    if (await checkAndRequestOverlayPermission()) {
+      await showScamOverlay(
+        'Test Alert',
+        'TEST',
+        {
+          'severity': 'TEST',
+          'containsUrl': 'false',
+        },
+      );
+      
+      // Auto-hide after 3 seconds
+      await Future.delayed(const Duration(seconds: 3));
+      await hideAlert();
+    } else {
+      debugPrint('⚠️ Overlay permission not granted');
     }
-  }
-
-  Future<void> openNotificationListenerSettings() async {
-    try {
-      await _notificationChannel
-          .invokeMethod('openNotificationListenerSettings');
-    } on PlatformException catch (e) {
-      debugPrint(
-          "Failed to open notification listener settings: '${e.message}'.");
-      // Fallback
-      if (await canLaunchUrl(Uri.parse('package:com.android.settings'))) {
-        launchUrl(Uri.parse('package:com.android.settings'));
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    // Perform any cleanup here if necessary, e.g., unregistering listeners
-    debugPrint("OverlayService Disposed");
-    super.dispose();
   }
 }

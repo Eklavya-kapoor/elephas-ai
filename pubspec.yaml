@@ -19,24 +19,29 @@ dependencies:
   # Permission handling
   permission_handler: ^12.0.0
 
+  # Device feedback is now handled through Flutter's built-in haptic feedback
+
   # SMS and Call Log access
   flutter_sms_inbox: ^1.0.2
   call_log: ^6.0.0
+
+  # Real phone contacts sync (contacts_service removed - namespace issues on new AGP)
+  flutter_contacts: ^1.1.9+2
 
   # Local data storage
   shared_preferences: ^2.2.2
 
   # State management
   provider: ^6.1.1
-
-  # Local notifications
-  flutter_local_notifications: ^19.0.0
-
-  # Launching URLs (e.g., in browser)
-  url_launcher: ^6.2.2
-
-  # Toast messages
-  fluttertoast: ^8.2.12 # Confirmed as latest stable
+  
+  # UI Components
+  fluttertoast: ^8.2.12 # Toast messages
+  flutter_local_notifications: ^19.0.0 # Local notifications
+  url_launcher: ^6.2.2 # Launching URLs (e.g., in browser)
+  
+  # Device & System Integration - using permission_handler for settings navigation
+  package_info_plus: ^8.3.0
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:
@@ -50,9 +55,13 @@ flutter:
 
   # Assets section for images and other resources
   assets:
+    - assets/images/
+    - assets/images/URL_ALERT.PNG  # URL alert image
+    - assets/images/overlay.png
+    - android/app/src/main/res/drawable/overlay_image.png
+    - assets/images/elephas_icon.png
     - assets/images/elephas_logo.png
     - assets/images/elephas_logo_full.png
-    - assets/images/elephas_icon.png
 
   # To add custom fonts, uncomment the fonts section. Example:
   # fonts:

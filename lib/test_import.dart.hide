@@ -1,0 +1,8 @@
+import 'package:flutter/material.dart';
+import '../services/elephas_main_service.dart';
+
+void testImport() {
+  final service = ElephasMainService.instance;
+  final widget = ElephasWidget(child: Container());
+  print('Import test successful: $service, $widget');
+}

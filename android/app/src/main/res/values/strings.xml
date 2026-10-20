@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">ScamShield AI</string>
-    <string name="accessibility_service_description">ScamShield screen monitoring service</string>
+    <string name="app_name">Elephas AI</string>
+    <string name="accessibility_service_description">Elephas AI\'s Scam Protection Service - Monitors messaging apps for potential scams. This service runs silently in the background and does not affect screen readers like TalkBack or other accessibility features.</string>
 </resources>

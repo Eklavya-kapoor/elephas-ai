@@ -1,138 +1,148 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
-import 'package:elephas_ai/screens/home_screen.dart';
-import 'package:elephas_ai/screens/permission_screen.dart';
-import 'package:elephas_ai/screens/splash_screen.dart';
-import 'package:elephas_ai/services/overlay_service.dart';
-import 'package:elephas_ai/services/screen_monitor_service.dart';
-import 'package:elephas_ai/services/scam_detection_service.dart';
-import 'package:elephas_ai/services/sms_monitor_service.dart';
-import 'package:elephas_ai/services/call_monitor_service.dart';
+import 'core/services/intelligent_protection_service.dart';
+import 'core/services/channel_monitor.dart';
+import 'core/services/contact_intelligence.dart';
+import 'core/services/conversation_analyzer.dart';
+import 'screens/permissions_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/history_screen.dart';
+import 'services/screen_monitor_service.dart';
+import 'services/overlay_service.dart';
+import 'services/phase1_overlay_integration.dart';
+import 'services/permissions_service.dart';
+import 'services/sms_monitor_service.dart';
+import 'services/scam_detection_service.dart';
+import 'services/real_contacts_service.dart';
+import 'services/device_registration_service.dart';
 
-void main() {
+void main() async {
+  // Make main async
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => OverlayService()),
-        ChangeNotifierProvider(create: (_) => ScreenMonitorService()),
-        ChangeNotifierProvider(create: (_) => SmartScamDetectionService()),
-        ChangeNotifierProvider(create: (_) => SmsMonitorService()),
-        ChangeNotifierProvider(create: (_) => CallMonitorService()),
-      ],
-      child: const MyApp(),
-    ),
-  );
-}
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  try {
+    // Create services
+    final permissionsService = PermissionsService();
+    final contactIntelligence = ContactIntelligenceService();
+    final conversationAnalyzer = ConversationAnalyzer.instance;
+    final channelMonitor = ChannelMonitor();
+    final smsMonitorService = SmsMonitorService();
 
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
+    // Sync real phone contacts (non-blocking - if permission isn't granted
+    // yet, ScreenMonitorService safely defaults to treating senders as
+    // unsaved/unknown until a later sync succeeds)
+    RealContactsService.instance.syncContacts().catchError((e) {
+      debugPrint('⚠️ Real contacts sync failed: $e');
+    });
 
-class _MyAppState extends State<MyApp> {
-  static const MethodChannel _appControlChannel =
-      MethodChannel('elephas_ai/app_control');
+    // Register this install with the backend and start heartbeats, so the
+    // admin dashboard can show real device/scan counts (non-blocking).
+    DeviceRegistrationService.instance.registerAndStartHeartbeat().catchError((e) {
+      debugPrint('⚠️ Device registration failed: $e');
+    });
 
-  late Future<bool> _initializationCheck;
+    // Get scam detection service singleton and initialize it
+    final scamDetectionService = SmartScamDetectionService.instance;
 
-  @override
-  void initState() {
-    super.initState();
-    _initializationCheck = _initializeAndRequestPermissions();
-  }
-
-  Future<bool> _initializeAndRequestPermissions() async {
-    // 1. Request all necessary permissions
-    bool allGranted = await _requestAllNecessaryPermissions();
-    if (!allGranted) return false;
-
-    // Check if the widget is still mounted before proceeding
-    if (!mounted) return false;
-
-    // 2. Initialize services after permissions are granted
-    final overlayService = Provider.of<OverlayService>(context, listen: false);
-    final screenMonitorService =
-        Provider.of<ScreenMonitorService>(context, listen: false);
-    final scamDetectionService =
-        Provider.of<SmartScamDetectionService>(context, listen: false);
-    final smsMonitorService =
-        Provider.of<SmsMonitorService>(context, listen: false);
-    final callMonitorService =
-        Provider.of<CallMonitorService>(context, listen: false);
-
-    // Initialize core services
-    overlayService.initialize();
-    screenMonitorService.initialize(scamDetectionService, overlayService);
-
-    // Start monitoring services
-    await smsMonitorService.startMonitoring(
-        scamDetectionService, overlayService);
-    callMonitorService.startMonitoring();
-
-    // Check if still mounted before continuing with async operations
-    if (!mounted) return false;
-
-    await screenMonitorService.startRealtimeMonitoring();
-
-    // Check if still mounted before continuing with platform operations
-    if (!mounted) return false;
-
-    // 3. Start native background monitoring service
+    // Initialize with error handling
     try {
-      await _appControlChannel.invokeMethod('startBackgroundMonitoringService');
-    } on PlatformException catch (e) {
-      // Use if (mounted) check before using context in error handling
-      debugPrint(
-          "Failed to start background monitoring service: '${e.message}'.");
+      await scamDetectionService.initialize();
+    } catch (e) {
+      debugPrint('⚠️ ScamDetectionService init failed: $e');
     }
 
-    return true;
-  }
+    // Create main protection service with dependencies
+    final protectionService = IntelligentProtectionService(
+      contactIntelligence: contactIntelligence,
+      conversationAnalyzer: conversationAnalyzer,
+      channelMonitor: channelMonitor,
+    );
 
-  Future<bool> _requestAllNecessaryPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.sms,
-      Permission.phone,
-      Permission.notification,
-      Permission.storage,
-    ].request();
+    // Create and initialize overlay service
+    final overlayService = OverlayService();
+    overlayService.initialize();
 
-    return !statuses.values.any((status) => status.isDenied);
+    // Initialize sms monitoring with error handling
+    try {
+      await smsMonitorService.startMonitoring(
+          scamDetectionService, overlayService);
+    } catch (e) {
+      debugPrint('⚠️ SMS monitoring init failed: $e');
+    }
+
+    // Create Phase 1 integration
+    final phase1Integration = ScamShieldPhase1Overlay(
+      protectionService: protectionService,
+      overlayService: overlayService,
+    );
+
+    runApp(
+      MultiProvider(
+        providers: [
+          // Core services
+          Provider<ContactIntelligenceService>.value(
+              value: contactIntelligence),
+          Provider<ConversationAnalyzer>.value(value: conversationAnalyzer),
+          ChangeNotifierProvider<ChannelMonitor>.value(value: channelMonitor),
+          ChangeNotifierProvider<PermissionsService>.value(
+              value: permissionsService),
+          ChangeNotifierProvider<SmsMonitorService>.value(
+              value: smsMonitorService),
+          ChangeNotifierProvider<SmartScamDetectionService>.value(
+              value: scamDetectionService),
+
+          // Main services
+          ChangeNotifierProvider<IntelligentProtectionService>.value(
+              value: protectionService),
+          ChangeNotifierProvider<OverlayService>.value(value: overlayService),
+          Provider<ScamShieldPhase1Overlay>.value(value: phase1Integration),
+
+          // Screen monitoring (still used for UI protection)
+          ChangeNotifierProvider(create: (context) {
+            final screenMonitor =
+                ScreenMonitorService(overlayService: overlayService);
+            screenMonitor.startMonitoring();
+            return screenMonitor;
+          }),
+        ],
+        child: const ElephantAI(),
+      ),
+    );
+  } catch (e, stack) {
+    debugPrint('❌ FATAL ERROR during app startup: $e');
+    debugPrint('Stack: $stack');
+    // Show a minimal error app
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text('App failed to start: $e'),
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class ElephantAI extends StatelessWidget {
+  const ElephantAI({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Elephas AI',
       theme: ThemeData(
-        primarySwatch: Colors.indigo,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6FAC)),
+        scaffoldBackgroundColor: const Color(0xFFF7F9FC),
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4F46E5), // Elephas primary color
-          brightness: Brightness.light,
-        ),
       ),
-      home: FutureBuilder<bool>(
-        future: _initializationCheck,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SplashScreen();
-          }
-
-          if (snapshot.data == true) {
-            return const HomeScreen();
-          }
-
-          return const PermissionScreen();
-        },
-      ),
+      home: const PermissionsScreen(),
+      routes: {
+        '/settings': (context) => const SettingsScreen(),
+        '/history': (context) => const HistoryScreen(),
+      },
     );
   }
 }

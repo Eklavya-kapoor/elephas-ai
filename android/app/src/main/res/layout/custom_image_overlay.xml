@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/imageOverlayRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent">
+
+    <!-- ONLY your custom image - nothing else -->
+    <ImageView
+        android:id="@+id/customOverlayImage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/overlay_image"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true" />
+
+</RelativeLayout>

@@ -1,14 +1,23 @@
 // ===== android/app/build.gradle.kts =====
 // (Replace your entire android/app/build.gradle.kts with this)
 
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 android {
-    namespace = "com.example.scamshield_flutter_app"
+    namespace = "com.elephas.ai"
     compileSdk = 35 // Keep as is, or update to 34 if that's your targetSdk
     ndkVersion = "27.0.12077973" // Keep as is
 
@@ -23,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.scamshield_flutter_app"
+        applicationId = "com.elephas.ai"
         minSdk = 21
         targetSdk = 35 // Keep as is
         versionCode = 1
@@ -40,6 +49,17 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -47,7 +67,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystorePropertiesFile.exists())
+                signingConfigs.getByName("release")
+            else
+                signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false

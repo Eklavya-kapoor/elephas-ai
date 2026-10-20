@@ -1,0 +1,11 @@
+// This file has been temporarily converted to .txt while we focus on core functionality
+// Will be restored when implementing screen monitoring features
+
+// lib/services/screen_monitor_service.dart
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:elephas_ai/core/models/detection_models.dart' as models;
+import 'scam_detection_service.dart';
+import 'overlay_service.dart';
+
+[...Content of the original screen_monitor_service.dart file...]

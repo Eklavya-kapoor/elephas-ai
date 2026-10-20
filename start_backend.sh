@@ -9,5 +9,5 @@ echo ""
 cd /Users/eklavya/Desktop/scamshield-ai
 
 # Start the server
-echo "Starting server..."
-python3 run.py
+echo "Starting server on 192.168.0.106:8000..."
+python3 run.py --host 192.168.0.106 --port 8000

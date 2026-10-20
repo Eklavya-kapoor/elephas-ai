@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/scam_detection_service.dart';
-import '../models/alert_level.dart';
-import '../models/scam_detection_models.dart';
+import '../services/scam_detection_service.dart'; // Enhanced Elephas AI
+import '../core/models/detection_models.dart';
+import '../core/models/alert_types.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -84,31 +84,35 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryItem(BuildContext context, ScamDetectionResult result) {
+  Widget _buildHistoryItem(BuildContext context, DetectionResult result) {
     final theme = Theme.of(context);
 
     Color getAlertColor() {
-      switch (result.alertLevel) {
-        case AlertLevel.critical:
+      switch (result.riskLevel) {
+        case RiskLevel.critical:
           return Colors.red;
-        case AlertLevel.high:
+        case RiskLevel.high:
           return Colors.orange;
-        case AlertLevel.medium:
+        case RiskLevel.medium:
           return Colors.yellow.shade800;
-        case AlertLevel.none:
-          return Colors.green;
+        case RiskLevel.low:
+          return Colors.blue;
+        case RiskLevel.minimal:
+          return Colors.grey;
       }
     }
 
     String getAlertEmoji() {
-      switch (result.alertLevel) {
-        case AlertLevel.critical:
+      switch (result.riskLevel) {
+        case RiskLevel.critical:
           return '🚨';
-        case AlertLevel.high:
+        case RiskLevel.high:
           return '⚠️';
-        case AlertLevel.medium:
+        case RiskLevel.medium:
           return '⚡';
-        case AlertLevel.none:
+        case RiskLevel.low:
+          return '🔍';
+        case RiskLevel.minimal:
           return '✅';
       }
     }
@@ -124,24 +128,24 @@ class HistoryScreen extends StatelessWidget {
           ),
         ),
         title: Text(
-          result.isScam ? 'Scam Detected' : 'Safe Content',
+          result.isThreat ? 'Threat Detected' : 'Safe Content',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: result.isScam ? theme.colorScheme.error : Colors.green,
+            color: result.isThreat ? theme.colorScheme.error : Colors.green,
           ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(result.reason),
-            if (result.scamTypes.isNotEmpty) ...[
+            Text(result.reasoning),
+            if (result.evidence?.isNotEmpty == true) ...[
               const SizedBox(height: 4),
               Wrap(
                 spacing: 4,
-                children: result.scamTypes
-                    .map((type) => Chip(
-                          label: Text(type),
+                children: result.evidence!.entries
+                    .map((e) => Chip(
+                          label: Text('${e.key}: ${e.value}'),
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
                         ))

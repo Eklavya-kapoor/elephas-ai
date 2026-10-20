@@ -1,8 +1,8 @@
 // lib/screens/sensitivity_settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/scam_detection_service.dart';
-import '../models/alert_level.dart';
+import '../services/scam_detection_service.dart'; // Enhanced Elephas AI
+import '../core/models/alert_types.dart';
 
 class SensitivitySettingsScreen extends StatefulWidget {
   const SensitivitySettingsScreen({super.key});
@@ -22,7 +22,8 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
   void initState() {
     super.initState();
     // Load current settings from scam detection service
-    final scamService = Provider.of<SmartScamDetectionService>(context, listen: false);
+    final scamService =
+        Provider.of<SmartScamDetectionService>(context, listen: false);
     _smsSensitivity = scamService.smsSensitivity;
     _callSensitivity = scamService.callSensitivity;
     _screenSensitivity = scamService.screenSensitivity;
@@ -32,7 +33,7 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final scamService = Provider.of<SmartScamDetectionService>(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detection Sensitivity'),
@@ -45,7 +46,6 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
             style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
           const SizedBox(height: 24),
-          
           _buildSectionHeader('SMS Detection'),
           _buildSensitivitySlider(
             value: _smsSensitivity,
@@ -56,7 +56,6 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
               });
             },
           ),
-          
           const SizedBox(height: 16),
           _buildSectionHeader('Call Screening'),
           _buildSensitivitySlider(
@@ -68,7 +67,6 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
               });
             },
           ),
-          
           const SizedBox(height: 16),
           _buildSectionHeader('Screen Monitoring'),
           _buildSensitivitySlider(
@@ -80,11 +78,9 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
               });
             },
           ),
-          
           const SizedBox(height: 24),
           _buildSectionHeader('Default Alert Level'),
           _buildAlertLevelSelector(),
-          
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: () {
@@ -94,7 +90,7 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
                 _callSensitivity = 0.5;
                 _screenSensitivity = 0.5;
                 _defaultAlertLevel = AlertLevel.medium;
-                
+
                 // Update service
                 scamService.smsSensitivity = 0.5;
                 scamService.callSensitivity = 0.5;
@@ -163,7 +159,7 @@ class SensitivitySettingsState extends State<SensitivitySettingsScreen> {
           title: const Text('None'),
           subtitle: const Text('Only detect, no alerts'),
           leading: Radio<AlertLevel>(
-            value: AlertLevel.none,
+            value: AlertLevel.info,
             groupValue: _defaultAlertLevel,
             onChanged: (AlertLevel? value) {
               if (value != null) {

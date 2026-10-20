@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Simple elephant logo -->
+  <rect width="512" height="512" fill="#6750A4" />
+  <circle cx="256" cy="256" r="150" fill="#EAE0FF" />
+  <path d="M340,180 C390,190 420,240 410,300 C400,360 380,380 350,400 
+           C290,430 240,420 190,390 C140,360 120,310 130,250 
+           C140,190 180,150 240,140 C300,130 330,160 340,180 Z" 
+        fill="#6750A4" />
+  <!-- Trunk -->
+  <path d="M320,280 C330,300 340,320 330,340 C320,360 300,370 280,380 
+           C260,390 240,380 230,370" 
+        stroke="#EAE0FF" stroke-width="20" fill="none" />
+  <!-- Tusks -->
+  <path d="M270,310 L290,340" stroke="white" stroke-width="8" />
+  <path d="M310,310 L330,340" stroke="white" stroke-width="8" />
+  <!-- Eye -->
+  <circle cx="270" cy="230" r="10" fill="white" />
+</svg>

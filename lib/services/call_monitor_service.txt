@@ -1,0 +1,524 @@
+// This file has been temporarily converted to .txt while we focus on core functionality
+// Will be restored when implementing call monitoring features
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:call_log/call_log.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:elephas_ai/core/models/detection_models.dart' as models;
+import 'scam_detection_service.dart'; // Enhanced Elephas AI detection
+import 'overlay_service.dart';
+import 'dart:async';
+
+class CallMonitorService extends ChangeNotifier {
+  static const MethodChannel _callMonitorChannel =
+      MethodChannel('elephas_ai/call_monitor');
+  static const MethodChannel _speechRecognitionChannel =
+      MethodChannel('elephas_ai/speech_recognition');
+  static const MethodChannel _callControlChannel =
+      MethodChannel('elephas_ai/call_control');
+
+  SmartScamDetectionService? _scamDetectionService;
+  OverlayService? _overlayService;
+
+  bool _isCallActive = false;
+  bool _isLiveMonitoring = false;
+  int _totalCallsScanned = 0;
+  int _suspiciousCalls = 0;
+  int _liveScansStopped = 0;
+  final List<String> _blockedNumbers = [];
+  final List<String> _liveTranscript = [];
+  String _currentCallNumber = '';
+  String _currentCallDirection = '';
+  Timer? _transcriptTimer;
+  String _accumulatedText = '';
+
+  // The monitoring state reflects whether call protection is active
+  bool get isMonitoring => _isLiveMonitoring || _isCallActive;
+
+  bool get isLiveMonitoring => _isLiveMonitoring;
+  bool get isCallActive => _isCallActive;
+  int get totalCallsScanned => _totalCallsScanned;
+  int get suspiciousCalls => _suspiciousCalls;
+  int get liveScansStopped => _liveScansStopped;
+  List<String> get blockedNumbers => _blockedNumbers;
+  List<String> get liveTranscript => _liveTranscript;
+  String get currentCallNumber => _currentCallNumber;
+
+  void initialize(
+      SmartScamDetectionService scamDetection, OverlayService overlayService) {
+    _scamDetectionService = scamDetection;
+    _overlayService = overlayService;
+    _callMonitorChannel.setMethodCallHandler(_handleNativeMethodCall);
+    _speechRecognitionChannel.setMethodCallHandler(_handleSpeechRecognition);
+    debugPrint(
+        '🎯 LIVE CALL SCAM DETECTION: Enhanced CallMonitorService initialized');
+  }
+
+  Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
+    debugPrint('🎯 LIVE CALL: Received native call: ${call.method}');
+    switch (call.method) {
+      case 'onCallStateChanged':
+        final state = call.arguments['state'] as String? ?? '';
+        final number = call.arguments['number'] as String? ?? '';
+        final direction = call.arguments['direction'] as String? ?? '';
+        await _handleCallStateChange(state, number, direction);
+        break;
+      case 'onCallAudioReady':
+        await _startLiveAudioMonitoring();
+        break;
+      case 'onCallEnded':
+        await _stopLiveAudioMonitoring();
+        break;
+      default:
+        debugPrint('Unknown call method: ${call.method}');
+    }
+  }
+
+  Future<dynamic> _handleSpeechRecognition(MethodCall call) async {
+    switch (call.method) {
+      case 'onSpeechResult':
+        final text = call.arguments['text'] as String? ?? '';
+        final speaker = call.arguments['speaker'] as String? ??
+            'caller'; // 'caller' or 'user'
+        final confidence = call.arguments['confidence'] as double? ?? 0.0;
+        await _processSpeechResult(text, speaker, confidence);
+        break;
+      case 'onSpeechError':
+        final error = call.arguments['error'] as String? ?? '';
+        debugPrint('🎯 LIVE CALL: Speech recognition error: $error');
+        break;
+      default:
+        debugPrint('Unknown speech method: ${call.method}');
+    }
+  }
+
+  Future<void> _handleCallStateChange(
+      String state, String number, String direction) async {
+    debugPrint(
+        '🎯 LIVE CALL: State changed to $state for $number ($direction)');
+
+    _currentCallNumber = number;
+    _currentCallDirection = direction;
+
+    switch (state) {
+      case 'RINGING':
+      case 'OFFHOOK':
+        _isCallActive = true;
+        await _prepareForLiveMonitoring();
+        break;
+      case 'IDLE':
+        _isCallActive = false;
+        await _stopLiveAudioMonitoring();
+        await _finalizeCallAnalysis();
+        break;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _prepareForLiveMonitoring() async {
+    if (!_isCallActive || _scamDetectionService == null) return;
+
+    debugPrint(
+        '🎯 LIVE CALL: Preparing for live monitoring of $_currentCallNumber');
+
+    // Clear previous transcript
+    _liveTranscript.clear();
+    _accumulatedText = '';
+
+    // Check if number is already blocked
+    if (_blockedNumbers.contains(_currentCallNumber)) {
+      await _showBlockedNumberAlert();
+      return;
+    }
+
+    // Start speech recognition
+    await _startSpeechRecognition();
+  }
+
+  Future<void> _startSpeechRecognition() async {
+    try {
+      await _speechRecognitionChannel.invokeMethod('startListening', {
+        'language': 'auto', // Auto-detect language
+        'continuous': true,
+        'partialResults': true,
+        'separateSpeakers': true, // Separate caller vs user
+      });
+      debugPrint('🎯 LIVE CALL: Speech recognition started');
+    } catch (e) {
+      debugPrint('🎯 LIVE CALL: Failed to start speech recognition: $e');
+    }
+  }
+
+  Future<void> _startLiveAudioMonitoring() async {
+    if (_isLiveMonitoring) return;
+
+    _isLiveMonitoring = true;
+    debugPrint('🎯 LIVE CALL: Started live audio monitoring');
+
+    // Start periodic transcript processing
+    _transcriptTimer =
+        Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      _processAccumulatedText();
+    });
+
+    notifyListeners();
+  }
+
+  Future<void> _stopLiveAudioMonitoring() async {
+    if (!_isLiveMonitoring) return;
+
+    _isLiveMonitoring = false;
+    debugPrint('🎯 LIVE CALL: Stopped live audio monitoring');
+
+    _transcriptTimer?.cancel();
+    _transcriptTimer = null;
+
+    try {
+      await _speechRecognitionChannel.invokeMethod('stopListening');
+    } catch (e) {
+      debugPrint('🎯 LIVE CALL: Error stopping speech recognition: $e');
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _processSpeechResult(
+      String text, String speaker, double confidence) async {
+    if (text.isEmpty || confidence < 0.5) return;
+
+    // Only process caller's speech for scam detection
+    if (speaker == 'caller') {
+      debugPrint(
+          '🎯 LIVE CALL: Caller said: "$text" (confidence: $confidence)');
+
+      // Add to transcript
+      _liveTranscript.add('[$speaker]: $text');
+      _accumulatedText += '$text ';
+
+      // Process immediately if it's a complete sentence
+      if (text.endsWith('.') || text.endsWith('!') || text.endsWith('?')) {
+        await _analyzeCallerSpeech(text);
+      }
+    } else {
+      // Log user speech but don't analyze
+      debugPrint('🎯 LIVE CALL: User said: "$text"');
+      _liveTranscript.add('[$speaker]: $text');
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _processAccumulatedText() async {
+    if (_accumulatedText.trim().isEmpty) return;
+
+    // Split accumulated text into sentences
+    List<String> sentences = _accumulatedText
+        .split(RegExp(r'[.!?]\s*'))
+        .where((s) => s.trim().length > 5)
+        .toList();
+
+    if (sentences.isNotEmpty) {
+      // Process the last complete sentence
+      String lastSentence = sentences.last.trim();
+      if (lastSentence.isNotEmpty) {
+        await _analyzeCallerSpeech(lastSentence);
+      }
+    }
+  }
+
+  Future<void> _analyzeCallerSpeech(String text) async {
+    if (_scamDetectionService == null || _overlayService == null) return;
+
+    try {
+      debugPrint('🎯 LIVE CALL: Analyzing caller speech: "$text"');
+
+      // Clear cache to force real-time backend API call
+      _scamDetectionService!.clearCache();
+      // Send to BERT API for scam analysis
+      final result = await _scamDetectionService!.scanMessage(text);
+
+      if (result.isScam && result.alertLevel != models.AlertLevel.info) {
+        await _showLiveScamAlert(
+            models.ScamDetectionResult.fromDetectionResult(result), text);
+      }
+    } catch (e) {
+      debugPrint('🎯 LIVE CALL: Error analyzing speech: $e');
+    }
+  }
+
+  Future<void> _showLiveScamAlert(
+      models.ScamDetectionResult result, String triggeringText) async {
+    if (_overlayService == null) return;
+
+    _liveScansStopped++;
+
+    String alertType = _getAlertType(result.alertLevel);
+    String alertMessage = _formatLiveCallAlert(result, triggeringText);
+
+    await _overlayService!.showScamOverlay(
+      alertMessage,
+      alertType: alertType,
+      additionalData: {
+        'callNumber': _currentCallNumber,
+        'callDirection': _currentCallDirection,
+        'triggeringText': triggeringText,
+        'confidence': result.confidence,
+        'scamTypes': result.scamTypes,
+        'isLiveCall': true,
+        'actions': ['hang_up', 'record', 'report', 'continue'],
+      },
+    );
+
+    // Vibrate urgently for live call scams
+    await _alertUserDuringCall(result.alertLevel);
+
+    debugPrint(
+        '🎯 LIVE CALL: SCAM DETECTED! "${result.reason}" (${result.confidence})');
+    debugPrint('🎯 LIVE CALL: Triggering text: "$triggeringText"');
+
+    notifyListeners();
+  }
+
+  String _getAlertType(models.AlertLevel level) {
+    switch (level) {
+      case models.AlertLevel.critical:
+        return 'critical_live_call';
+      case models.AlertLevel.high:
+        return 'high_live_call';
+      case models.AlertLevel.medium:
+        return 'medium_live_call';
+      case models.AlertLevel.low:
+        return 'low_live_call';
+      case models.AlertLevel.info:
+        return 'none';
+    }
+  }
+
+  String _formatLiveCallAlert(
+      models.ScamDetectionResult result, String triggeringText) {
+    String emoji = _getAlertEmoji(result.alertLevel);
+    String confidenceText = '${(result.confidence * 100).toInt()}%';
+
+    switch (result.alertLevel) {
+      case models.AlertLevel.critical:
+        return '$emoji LIVE CALL SCAM ALERT!\n$confidenceText confident this is a scam\n\n${result.reason}\n\nCaller said: "$triggeringText"\n\n🔴 HANG UP IMMEDIATELY!';
+      case models.AlertLevel.high:
+        return '$emoji SUSPICIOUS CALL WARNING!\n$confidenceText confident this may be a scam\n\n${result.reason}\n\nCaller said: "$triggeringText"\n\n⚠️ Be very careful!';
+      case models.AlertLevel.medium:
+        return '$emoji CAUTION: Unusual Call Pattern\n$confidenceText confident something is suspicious\n\n${result.reason}\n\nCaller said: "$triggeringText"\n\n💭 Stay alert!';
+      case models.AlertLevel.low:
+        return '$emoji MINOR ALERT: Potential Issue\n$confidenceText confident there might be something to watch\n\n${result.reason}\n\nCaller said: "$triggeringText"\n\n🔍 Keep monitoring...';
+      case models.AlertLevel.info:
+        return '';
+    }
+  }
+
+  String _getAlertEmoji(models.AlertLevel level) {
+    switch (level) {
+      case models.AlertLevel.critical:
+        return '🚨';
+      case models.AlertLevel.high:
+        return '⚠️';
+      case models.AlertLevel.medium:
+        return '💭';
+      case models.AlertLevel.low:
+        return '🔍';
+      case models.AlertLevel.info:
+        return '';
+    }
+  }
+
+  Future<void> _alertUserDuringCall(models.AlertLevel level) async {
+    try {
+      switch (level) {
+        case models.AlertLevel.critical:
+          await _callControlChannel.invokeMethod('vibrate', {
+            'duration': 2000,
+            'pattern': 'urgent_call',
+          });
+          break;
+        case models.AlertLevel.high:
+          await _callControlChannel.invokeMethod('vibrate', {
+            'duration': 1000,
+            'pattern': 'warning_call',
+          });
+          break;
+        case models.AlertLevel.medium:
+          await _callControlChannel.invokeMethod('vibrate', {
+            'duration': 500,
+            'pattern': 'notice_call',
+          });
+          break;
+        case models.AlertLevel.low:
+          await _callControlChannel.invokeMethod('vibrate', {
+            'duration': 200,
+            'pattern': 'minimal_call',
+          });
+          break;
+        case models.AlertLevel.info:
+          break;
+      }
+    } catch (e) {
+      debugPrint('🎯 LIVE CALL: Error alerting user: $e');
+    }
+  }
+
+  Future<void> _showBlockedNumberAlert() async {
+    if (_overlayService == null) return;
+
+    await _overlayService!.showScamOverlay(
+      '🚫 BLOCKED NUMBER CALLING!\n\nThis number is in your blocked list.\n\nNumber: $_currentCallNumber',
+      alertType: 'blocked_number',
+      additionalData: {
+        'callNumber': _currentCallNumber,
+        'callDirection': _currentCallDirection,
+        'isBlocked': true,
+        'actions': ['hang_up', 'unblock', 'report'],
+      },
+    );
+  }
+
+  Future<void> _finalizeCallAnalysis() async {
+    if (_liveTranscript.isEmpty) return;
+
+    debugPrint(
+        '🎯 LIVE CALL: Finalizing call analysis for $_currentCallNumber');
+
+    // Save call transcript for future analysis
+    // Add to call history with scam analysis results
+    _totalCallsScanned++;
+
+    // Clear transcript
+    _liveTranscript.clear();
+    _accumulatedText = '';
+    _currentCallNumber = '';
+    _currentCallDirection = '';
+
+    notifyListeners();
+  }
+
+  // Permission handling
+  Future<bool> requestPermissions() async {
+    final phonePermission = await Permission.phone.request();
+    final microphonePermission = await Permission.microphone.request();
+    final storagePermission = await Permission.storage.request();
+
+    return phonePermission.isGranted &&
+        microphonePermission.isGranted &&
+        storagePermission.isGranted;
+  }
+
+  // Start monitoring incoming calls
+  Future<void> startMonitoring() async {
+    if (!await requestPermissions()) {
+      debugPrint('🎯 CALL MONITORING: Permissions not granted');
+      return;
+    }
+
+    _isLiveMonitoring = true;
+
+    // Start native call monitoring
+    try {
+      await _callMonitorChannel.invokeMethod('startMonitoring');
+      debugPrint('🎯 CALL MONITORING: Started');
+    } catch (e) {
+      _isLiveMonitoring = false;
+      debugPrint('🎯 CALL MONITORING: Error starting monitoring: $e');
+    }
+
+    notifyListeners();
+  }
+
+  // Stop monitoring
+  Future<void> stopMonitoring() async {
+    _isLiveMonitoring = false;
+
+    try {
+      await _callMonitorChannel.invokeMethod('stopMonitoring');
+      debugPrint('🎯 CALL MONITORING: Stopped');
+    } catch (e) {
+      debugPrint('🎯 CALL MONITORING: Error stopping monitoring: $e');
+    }
+
+    notifyListeners();
+  }
+
+  // Get recent call logs
+  Future<List<CallLogEntry>> getRecentCalls() async {
+    if (!await Permission.phone.isGranted) return [];
+
+    try {
+      final entries = (await CallLog.get()).toList();
+      _totalCallsScanned = entries.length;
+
+      _suspiciousCalls = entries
+          .where((call) => _isSuspiciousNumber(call.number ?? ''))
+          .length;
+
+      notifyListeners();
+      return entries;
+    } catch (e) {
+      debugPrint('🎯 LIVE CALL: Error getting call logs: $e');
+      return [];
+    }
+  }
+
+  // Check if number is suspicious
+  bool _isSuspiciousNumber(String number) {
+    // Only check against manually blocked numbers and obviously fake patterns
+    if (number.length < 5) return true;
+    if (number.startsWith('0000') || number.startsWith('1111')) return true;
+    if (number.contains('*') || number.contains('#')) return true;
+    if (number == '+1234567890') return true; // Obvious fake number
+    if (number.startsWith('+0000')) return true; // Invalid country code
+
+    // Check against manually blocked numbers only
+    return _blockedNumbers.contains(number);
+  }
+
+  // Block/unblock numbers
+  void blockNumber(String number) {
+    if (!_blockedNumbers.contains(number)) {
+      _blockedNumbers.add(number);
+      debugPrint('🎯 LIVE CALL: Blocked number: $number');
+      notifyListeners();
+    }
+  }
+
+  void unblockNumber(String number) {
+    _blockedNumbers.remove(number);
+    debugPrint('🎯 LIVE CALL: Unblocked number: $number');
+    notifyListeners();
+  }
+
+  bool isBlocked(String number) {
+    return _blockedNumbers.contains(number);
+  }
+
+  // Get live call statistics
+  Map<String, dynamic> getCallStatistics() {
+    return {
+      'totalCallsScanned': _totalCallsScanned,
+      'suspiciousCalls': _suspiciousCalls,
+      'liveScansStopped': _liveScansStopped,
+      'blockedNumbers': _blockedNumbers.length,
+      'isLiveMonitoring': _isLiveMonitoring,
+      'currentCallActive': _isCallActive,
+    };
+  }
+
+  // Clear transcript history
+  void clearTranscript() {
+    _liveTranscript.clear();
+    notifyListeners();
+  }
+
+  // Dispose method
+  @override
+  void dispose() {
+    _transcriptTimer?.cancel();
+    stopMonitoring();
+    super.dispose();
+  }
+}

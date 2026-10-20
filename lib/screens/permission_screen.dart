@@ -1,14 +1,8 @@
-// lib/screens/permission_screen.dart
 import 'package:flutter/material.dart';
-import 'package:elephas_ai/services/overlay_service.dart';
-import 'package:elephas_ai/services/screen_monitor_service.dart';
-import 'package:fluttertoast/fluttertoast.dart'; // Make sure this is added to pubspec.yaml and you ran flutter pub get
-
-// Import HomeScreen as well, as it's navigated to from here
+import 'package:elephas_ai/services/permission_service.dart';
 import 'package:elephas_ai/screens/home_screen.dart';
 
 class PermissionScreen extends StatefulWidget {
-  // Ensure this constructor is const, as previously discussed
   const PermissionScreen({super.key});
 
   @override
@@ -16,12 +10,12 @@ class PermissionScreen extends StatefulWidget {
 }
 
 class _PermissionScreenState extends State<PermissionScreen> {
-  final OverlayService _overlayService = OverlayService();
-  final ScreenMonitorService _screenMonitorService = ScreenMonitorService();
+  final PermissionService _permissionService = PermissionService();
 
   bool _hasOverlayPermission = false;
   bool _hasNotificationAccess = false;
   bool _hasAccessibilityServiceEnabled = false;
+  bool _isCheckingPermissions = true;
 
   @override
   void initState() {
@@ -30,120 +24,108 @@ class _PermissionScreenState extends State<PermissionScreen> {
   }
 
   Future<void> _checkPermissions() async {
-    _hasOverlayPermission = await _overlayService.hasOverlayPermission();
-    _hasNotificationAccess = await _overlayService
-        .hasNotificationAccess(); // Placeholder for actual check
-    _hasAccessibilityServiceEnabled = await _screenMonitorService
-        .isAccessibilityServiceEnabled(); // Placeholder for actual check
-    setState(() {});
+    setState(() => _isCheckingPermissions = true);
+
+    final hasOverlay = await _permissionService.hasOverlayPermission();
+    final hasNotification =
+        await _permissionService.hasNotificationPermission();
+    final hasAccessibility =
+        await _permissionService.hasAccessibilityPermission();
+
+    if (mounted) {
+      setState(() {
+        _hasOverlayPermission = hasOverlay;
+        _hasNotificationAccess = hasNotification;
+        _hasAccessibilityServiceEnabled = hasAccessibility;
+        _isCheckingPermissions = false;
+      });
+
+      // If all permissions are granted, navigate to home screen
+      if (hasOverlay && hasNotification && hasAccessibility) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    }
   }
 
   Future<void> _requestPermission(String permissionType) async {
-    switch (permissionType) {
-      case 'overlay':
-        await _overlayService.openDrawOverlaysSettings();
-        break;
-      case 'notification':
-        await _overlayService.openNotificationListenerSettings();
-        break;
-      case 'accessibility':
-        await _screenMonitorService.openAccessibilitySettings();
-        break;
-      case 'screen_capture':
-        final granted =
-            await _screenMonitorService.requestScreenCapturePermission();
-        if (granted) {
-          Fluttertoast.showToast(msg: "Screen capture permission granted!");
-        } else {
-          Fluttertoast.showToast(msg: "Screen capture permission denied.");
-        }
-        break;
+    try {
+      switch (permissionType) {
+        case 'overlay':
+          await _permissionService.requestOverlayPermission(context);
+          break;
+        case 'notification':
+          await _permissionService.requestNotificationPermission(context);
+          break;
+        case 'accessibility':
+          await _permissionService.requestAccessibilityPermission(context);
+          break;
+      }
+
+      // Wait a bit for the user to grant the permission
+      await Future.delayed(const Duration(seconds: 1));
+      await _checkPermissions();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open settings: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
-    // Give user time to grant permission, then recheck
-    // It's good practice to show a toast or dialog here instructing the user
-    // to grant the permission and return to the app.
-    Fluttertoast.showToast(
-        msg: "Please grant permission in settings and return to app.");
-    Future.delayed(const Duration(seconds: 2), () => _checkPermissions());
   }
 
-  @override
-  Widget build(BuildContext context) {
-    bool allPermissionsGranted = _hasOverlayPermission &&
-        _hasNotificationAccess &&
-        _hasAccessibilityServiceEnabled;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Permissions Required'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
+  Widget _buildPermissionCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required bool isGranted,
+    required VoidCallback onRequest,
+  }) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isGranted
+                ? Colors.green.withAlpha(25)
+                : Colors.blue.withAlpha(25),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            isGranted ? Icons.check_circle : icon,
+            color: isGranted ? Colors.green : Colors.blue,
+            size: 24,
+          ),
+        ),
+        title: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Elephas AI needs the following permissions to protect you in real-time:',
-              style: TextStyle(fontSize: 16),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 20),
-            _buildPermissionRow(
-              'Draw Over Other Apps',
-              _hasOverlayPermission,
-              () => _requestPermission('overlay'),
-              'Allows Elephas AI to show scam alerts on top of other apps.',
-            ),
-            _buildPermissionRow(
-              'Notification Access',
-              _hasNotificationAccess,
-              () => _requestPermission('notification'),
-              'Allows Elephas AI to analyze incoming notifications (e.g., messages) for scams.',
-            ),
-            _buildPermissionRow(
-              'Accessibility Service',
-              _hasAccessibilityServiceEnabled,
-              () => _requestPermission('accessibility'),
-              'Allows Elephas AI to monitor screen content in messaging apps for potential scams.',
-            ),
-            _buildPermissionRow(
-              'Screen Capture',
-              true, // This is requested on demand, not a persistent setting.
-              () => _requestPermission('screen_capture'),
-              'Required for one-time screen analysis for advanced checks.',
-            ),
-            const SizedBox(height: 30),
-            if (allPermissionsGranted)
-              Center(
-                child: Column(
-                  children: [
-                    const Text(
-                      'All necessary permissions granted!',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                              builder: (context) => const HomeScreen()),
-                        );
-                      },
-                      child: const Text('Continue to App'),
-                    ),
-                  ],
+            const SizedBox(height: 12),
+            if (!isGranted)
+              ElevatedButton(
+                onPressed: onRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
                 ),
-              )
-            else
-              const Center(
-                child: Text(
-                  'Please grant all required permissions to proceed.',
-                  style: TextStyle(fontSize: 16, color: Colors.red),
-                  textAlign: TextAlign.center,
-                ),
+                child: Text(isGranted ? 'Granted' : 'Enable'),
               ),
           ],
         ),
@@ -151,38 +133,72 @@ class _PermissionScreenState extends State<PermissionScreen> {
     );
   }
 
-  Widget _buildPermissionRow(
-      String title, bool granted, VoidCallback onPressed, String description) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  description,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: granted ? null : onPressed, // Disable button if granted
-            style: ElevatedButton.styleFrom(
-              backgroundColor: granted ? Colors.green : Colors.blue,
-            ),
-            child: Text(granted ? 'Granted' : 'Grant'),
-          ),
-        ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Required Permissions'),
+        centerTitle: true,
       ),
+      body: _isCheckingPermissions
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _checkPermissions,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Elephas AI needs the following permissions to protect you from scams:',
+                        style: TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    _buildPermissionCard(
+                      title: 'Display Over Apps',
+                      description:
+                          'Allows Elephas AI to show alerts when potential scams are detected in your messages.',
+                      icon: Icons.layers,
+                      isGranted: _hasOverlayPermission,
+                      onRequest: () => _requestPermission('overlay'),
+                    ),
+                    _buildPermissionCard(
+                      title: 'Notifications',
+                      description:
+                          'Enables alerts and keeps you informed about the app\'s protection status.',
+                      icon: Icons.notifications,
+                      isGranted: _hasNotificationAccess,
+                      onRequest: () => _requestPermission('notification'),
+                    ),
+                    _buildPermissionCard(
+                      title: 'Accessibility Service',
+                      description:
+                          'Required to analyze messages in real-time and protect you from scams. This service is secure and respects your privacy.',
+                      icon: Icons.security,
+                      isGranted: _hasAccessibilityServiceEnabled,
+                      onRequest: () => _requestPermission('accessibility'),
+                    ),
+                    if (!_hasOverlayPermission ||
+                        !_hasNotificationAccess ||
+                        !_hasAccessibilityServiceEnabled)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Please enable all permissions to start protecting your messages from scams.',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Circular background for Elephas AI logo - optimized for white bg black elephant -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    
+    <!-- White background to complement your logo -->
+    <solid android:color="#FFFFFF" />
+    
+    <!-- Subtle red border to match the alert theme -->
+    <stroke
+        android:width="2dp"
+        android:color="#FF1744" />
+
+</shape>

@@ -1,0 +1,221 @@
+// lib/services/scam_detection_service.dart
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:elephas_ai/models/scam_detection_models.dart';
+import 'package:elephas_ai/config/app_config.dart';
+
+class BertApiResult {
+  final double confidence;
+  final String reason;
+  final List<String> scamTypes;
+
+  BertApiResult({
+    required this.confidence,
+    required this.reason,
+    required this.scamTypes,
+  });
+}
+
+class SmartScamDetectionService extends ChangeNotifier {
+  bool _isScanning = false;
+  bool get isScanning => _isScanning;
+
+  // Cache to avoid re-scanning same content
+  final Map<String, ScamDetectionResult> _cache = {};
+
+  // Scan history
+  final List<ScamDetectionResult> _scanHistory = [];
+  List<ScamDetectionResult> get scanHistory => List.unmodifiable(_scanHistory);
+  
+  // Custom rules for scam detection
+  final List<Map<String, dynamic>> _customRules = [];
+  List<Map<String, dynamic>> get customRules => List.unmodifiable(_customRules);
+
+  // Sensitivity settings
+  double _smsSensitivity = 0.5;
+  double _callSensitivity = 0.5;
+  double _screenSensitivity = 0.5;
+  AlertLevel _defaultAlertLevel = AlertLevel.medium;
+
+  // Sensitivity getters and setters
+  double get smsSensitivity => _smsSensitivity;
+  set smsSensitivity(double value) {
+    _smsSensitivity = value;
+    notifyListeners();
+  }
+
+  double get callSensitivity => _callSensitivity;
+  set callSensitivity(double value) {
+    _callSensitivity = value;
+    notifyListeners();
+  }
+
+  double get screenSensitivity => _screenSensitivity;
+  set screenSensitivity(double value) {
+    _screenSensitivity = value;
+    notifyListeners();
+  }
+
+  AlertLevel get defaultAlertLevel => _defaultAlertLevel;
+  set defaultAlertLevel(AlertLevel value) {
+    _defaultAlertLevel = value;
+    notifyListeners();
+  }
+
+  /// Main method to scan message and determine if alert should be shown
+  Future<ScamDetectionResult> scanMessage(String content,
+      {String? source}) async {
+    try {
+      _isScanning = true;
+      notifyListeners();
+
+      // 1. Quick validation - don't scan empty or very short messages
+      if (content.trim().isEmpty || content.length < 10) {
+        return ScamDetectionResult(
+          message: content,
+          isScam: false,
+          confidence: 0.0,
+          reason: 'Message too short to analyze',
+          alertLevel: AlertLevel.none,
+          scamTypes: const [],
+        );
+      }
+
+      // 2. Check cache first
+      final contentHash = content.hashCode.toString();
+      if (_cache.containsKey(contentHash)) {
+        return _cache[contentHash]!;
+      }
+
+      // 3. Call API for analysis
+      final apiResult = await _callBertApi(content);
+
+      // 4. Apply sensitivity adjustment
+      double adjustedConfidence = apiResult.confidence;
+      if (source == 'sms') {
+        adjustedConfidence *= _smsSensitivity;
+      } else if (source == 'call') {
+        adjustedConfidence *= _callSensitivity;
+      } else if (source == 'screen') {
+        adjustedConfidence *= _screenSensitivity;
+      }
+
+      // 5. Determine alert level
+      final alertLevel = _determineAlertLevel(adjustedConfidence);
+
+      // 6. Create and cache result
+      final result = ScamDetectionResult(
+        message: content,
+        isScam: alertLevel != AlertLevel.none,
+        confidence: adjustedConfidence,
+        reason: apiResult.reason,
+        alertLevel: alertLevel,
+        scamTypes: apiResult.scamTypes,
+      );
+
+      _cache[contentHash] = result;
+      _scanHistory.add(result);
+      notifyListeners();
+      return result;
+    } finally {
+      _isScanning = false;
+      notifyListeners();
+    }
+  }
+
+  /// Clear scan history and cache
+  void clearHistory() {
+    _scanHistory.clear();
+    _cache.clear();
+    notifyListeners();
+  }
+
+  /// Custom Rules Management
+  void addCustomRule(Map<String, dynamic> ruleData) {
+    _customRules.add(ruleData);
+    notifyListeners();
+  }
+
+  void removeCustomRule(int index) {
+    if (index >= 0 && index < _customRules.length) {
+      _customRules.removeAt(index);
+      notifyListeners();
+    }
+  }
+
+  void updateCustomRule(int index, Map<String, dynamic> ruleData) {
+    if (index >= 0 && index < _customRules.length) {
+      _customRules[index] = ruleData;
+      notifyListeners();
+    }
+  }
+
+  AlertLevel _determineAlertLevel(double confidence) {
+    if (confidence >= 0.9) return AlertLevel.critical;
+    if (confidence >= 0.7) return AlertLevel.high;
+    if (confidence >= 0.5) return AlertLevel.medium;
+    return AlertLevel.none;
+  }
+
+  /// Call BERT API for detailed scam analysis
+  Future<BertApiResult> _callBertApi(String content) async {
+    try {
+      final apiUrl = Uri.parse('${AppConfig.apiUrl}/scan');
+      debugPrint('🔍 Calling BERT API at: $apiUrl');
+
+      final requestBody = {
+        'text': content,
+        'metadata': {
+          'app': 'elephas_ai',
+          'version': '1.0.0',
+          'platform': 'android',
+          'timestamp': DateTime.now().toIso8601String(),
+          'detect_mixed_language': true,
+        }
+      };
+
+      debugPrint('📤 Request: ${jsonEncode(requestBody)}');
+
+      final response = await http
+          .post(
+            apiUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('📥 Response status: ${response.statusCode}');
+      debugPrint('📥 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return BertApiResult(
+          confidence: data['risk_score']?.toDouble() ?? 0.0,
+          reason: data['explanation'] ?? 'No specific reason provided',
+          scamTypes: (data['details']?['scam_types'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList(),
+        );
+      } else {
+        debugPrint('❌ API error: ${response.statusCode} - ${response.body}');
+        return BertApiResult(
+          confidence: 0.0,
+          reason: 'API error: ${response.statusCode}',
+          scamTypes: const [],
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ API call failed: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return BertApiResult(
+        confidence: 0.0,
+        reason: 'Error: $e',
+        scamTypes: const [],
+      );
+    }
+  }
+}

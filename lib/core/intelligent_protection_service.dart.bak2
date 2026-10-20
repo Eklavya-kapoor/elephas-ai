@@ -1,0 +1,392 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../models/alert_config.dart' as alertconfig;
+import '../models/app_activity.dart';
+import '../models/detection_result.dart';
+import '../models/protection_models.dart';
+
+// Services
+import '../services/channel_monitor.dart';
+import '../services/contact_intelligence.dart';
+import '../services/context_analyzer.dart';
+import '../services/detector.dart';
+
+/// IntelligentProtectionService: Core service for scam detection
+/// Handles message analysis and returns detection results
+class IntelligentProtectionService with ChangeNotifier {
+  final String _backendUrl = 'http://172.20.10.7:8000';
+  final String _logTag = 'IntelligentProtection';
+  
+  // Core services
+  late final ContactIntelligenceService _contactIntelligence;
+  late final ConversationContextAnalyzer _contextAnalyzer;
+  late final ZeroFalsePositiveDetector _detector;
+  late final ChannelSpecificMonitor _channelMonitor;
+  final http.Client _client = http.Client();
+
+  // State tracking
+  bool _isInitialized = false;
+  bool _isProtectionActive = false;
+  DateTime? _serviceStartTime;
+  
+  // Alert management
+  final alertconfig.AlertConfig _alertConfig = alertconfig.AlertConfig(
+    maxAlertsPerHour: 10,
+    minTimeBetweenAlerts: Duration(seconds: 30),
+    enableVibration: true,
+    enableSound: true,
+    enableToast: true
+  );
+  Timer? _alertLimitResetTimer;
+  DateTime? _lastAlertTime;
+  int _alertsThisHour = 0;
+  
+  // Performance tracking
+  int _totalScansPerformed = 0;
+  int _threatsDetected = 0;
+  int _falsePositivesAvoided = 0;
+  final List<DetectionResult> _recentAlerts = [];
+  
+  // Streams
+  final StreamController<DetectionResult> _alertController = StreamController.broadcast();
+  final StreamController<Map<String, dynamic>> _statsController = StreamController.broadcast();
+
+  // Public getters
+  bool get isProtectionActive => _isProtectionActive;
+  bool get isInitialized => _isInitialized;
+  Stream<DetectionResult> get alertStream => _alertController.stream;
+  Stream<Map<String, dynamic>> get statsStream => _statsController.stream;
+
+  // Constructor
+  IntelligentProtectionService() {
+    debugPrint('🔄 Creating IntelligentProtectionService');
+  }
+
+  /// Initialize the intelligent protection service
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    developer.log('🚀 Initializing Intelligent Protection Service...', name: _logTag);
+
+    // Initialize core components
+    _contactIntelligence = ContactIntelligenceService();
+    _contextAnalyzer = ConversationContextAnalyzer();
+    _detector = ZeroFalsePositiveDetector(_contactIntelligence, _contextAnalyzer);
+    _channelMonitor = ChannelSpecificMonitor();
+
+    // Setup performance tracking
+    _serviceStartTime = DateTime.now();
+    _alertLimitResetTimer = Timer.periodic(
+      const Duration(hours: 1),
+      _resetAlertLimits,
+    );
+
+    _isInitialized = true;
+    _isProtectionActive = true;
+    
+    developer.log('✅ Intelligent Protection Service initialized', name: _logTag);
+    notifyListeners();
+  }
+
+  /// Start protection (begin monitoring and detection)
+  Future<void> startProtection() async {
+    await _ensureInitialized();
+
+    if (_isProtectionActive) return;
+
+    try {
+      developer.log('Starting intelligent protection', name: _logTag);
+
+      // Start channel monitoring
+      await _channelMonitor.startMonitoring();
+      
+      // Subscribe to channel monitor activity
+      _channelMonitor.activityStream.listen(_handleAppActivity);
+
+      _isProtectionActive = true;
+      notifyListeners();
+
+      // Emit initial stats
+      _emitStats();
+
+      developer.log('Intelligent protection started successfully',
+          name: _logTag);
+    } catch (e) {
+      developer.log('Failed to start protection: $e', name: _logTag, error: e);
+      rethrow;
+    }
+  }
+
+  /// Stop protection
+  Future<void> stopProtection() async {
+    if (!_isProtectionActive) return;
+
+    try {
+      developer.log('Stopping intelligent protection', name: _logTag);
+
+      await _channelMonitor.stopMonitoring();
+
+      _isProtectionActive = false;
+      notifyListeners();
+
+      developer.log('Intelligent protection stopped', name: _logTag);
+    } catch (e) {
+      developer.log('Error stopping protection: $e', name: _logTag, error: e);
+    }
+  }
+
+  /// Get performance metrics
+  Map<String, dynamic> getPerformanceMetrics() {
+    final uptime = _serviceStartTime != null
+        ? DateTime.now().difference(_serviceStartTime!)
+        : Duration.zero;
+
+    return {
+      'totalScans': _totalScansPerformed,
+      'threatsDetected': _threatsDetected,
+      'falsePositivesAvoided': _falsePositivesAvoided,
+      'accuracyRate': _totalScansPerformed > 0
+          ? ((_totalScansPerformed - _threatsDetected) / _totalScansPerformed) *
+              100
+          : 100.0,
+      'alertsThisHour': _alertsThisHour,
+      'recentAlertsCount': _recentAlerts.length,
+      'uptimeMinutes': uptime.inMinutes,
+      'scansPerMinute': uptime.inMinutes > 0
+          ? (_totalScansPerformed / uptime.inMinutes).toStringAsFixed(2)
+          : '0',
+    };
+  }
+
+  /// Get recent alerts (last 24 hours)
+  List<DetectionResult> getRecentAlerts() {
+    final dayAgo = DateTime.now().subtract(const Duration(days: 1));
+    return _recentAlerts
+        .where((alert) => alert.timestamp.isAfter(dayAgo))
+        .toList();
+  }
+
+  /// Clear all alerts and reset metrics
+  Future<void> clearAlertsAndMetrics() async {
+    _recentAlerts.clear();
+    _totalScansPerformed = 0;
+    _threatsDetected = 0;
+    _falsePositivesAvoided = 0;
+    _alertsThisHour = 0;
+    _lastAlertTime = null;
+    _serviceStartTime = DateTime.now();
+
+    developer.log('Cleared alerts and reset metrics', name: _logTag);
+    _emitStats();
+    notifyListeners();
+  }
+
+  /// Get monitored apps information
+  List<Map<String, dynamic>> getMonitoredAppsInfo() {
+    if (!_isInitialized) return [];
+
+    return _channelMonitor.getMonitoredApps().map((config) {
+      return {
+        'packageName': config.packageName,
+        'displayName': config.displayName,
+        'riskLevel': config.baseRiskLevel.toString(),
+        'isEnabled': config.isEnabled,
+        'monitoringRules': config.monitoringRules,
+      };
+    }).toList();
+  }
+
+  /// Enable/disable monitoring for specific app
+  Future<void> setAppMonitoring(String packageName, bool enabled) async {
+    await _ensureInitialized();
+    await _channelMonitor.setAppMonitoring(packageName, enabled);
+    notifyListeners();
+  }
+
+  /// Get contact insights
+  Future<Map<String, dynamic>> getContactInsights(String contactId) async {
+    await _ensureInitialized();
+    return await _contactIntelligence.getRelationshipInsights(contactId);
+  }
+
+  // Private helper for error checking
+
+  /// Analyze a message using the ScamShield AI backend
+  Future<DetectionResult> analyzeMessage({
+    required String message,
+    required String contactId,
+    required String appPackage,
+    String? conversationHistory,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('❌ Service not initialized');
+      return DetectionResult(
+        message: message,
+        isScam: false,
+        confidence: 0.0,
+        reason: 'Service not initialized',
+      );
+    }
+
+    _totalScansPerformed++;
+    debugPrint('🔍 QUICK SCAN: Starting quick scan for message: $message');
+
+    try {
+      final response = await _client.post(
+        Uri.parse('$_backendUrl/scan'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'text': message,
+          'source': appPackage,
+          'contact_id': contactId,
+          'conversation_history': conversationHistory,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final result = DetectionResult(
+          message: message,
+          isScam: data['is_scam'] ?? false,
+          confidence: (data['confidence'] ?? 0.0).toDouble(),
+          reason: data['reason'] ?? 'Unknown',
+          additionalData: data['additional_data'],
+        );
+
+        debugPrint('✅ QUICK SCAN: Result - isScam=${result.isScam}, confidence=${result.confidence}, reason=${result.reason}');
+        
+        if (result.isScam && result.confidence > 0.8) {
+          _threatsDetected++;
+          _handleThreatDetected(result);
+        }
+
+        return result;
+      } else {
+        debugPrint('❌ API Error: ${response.statusCode}');
+        return DetectionResult(
+          message: message,
+          isScam: false,
+          confidence: 0.0,
+          reason: 'API Error: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ $_logTag Error analyzing message: $e');
+      return DetectionResult(
+        message: message,
+        isScam: false,
+        confidence: 0.0,
+        reason: 'Error: $e',
+      );
+    }
+  }
+
+  // Helper methods
+  void _resetAlertLimits(Timer timer) {
+    _alertsThisHour = 0;
+    developer.log('Alert limits reset', name: _logTag);
+  }
+
+  String _generateContactId(AppActivity activity) {
+    final windowTitle = activity.windowTitle ?? '';
+    final packageName = activity.packageName;
+    return '${packageName}_${windowTitle.hashCode.abs()}';
+  }
+
+  void _emitStats() {
+    final stats = getPerformanceMetrics();
+    _statsController.add(stats);
+  }
+
+  bool _shouldShowAlert(DetectionResult result) {
+    if (result.confidence < 0.8) {
+      return false;
+    }
+
+    if (_lastAlertTime != null) {
+      final timeSinceLastAlert = DateTime.now().difference(_lastAlertTime!);
+      if (timeSinceLastAlert < _alertConfig.minTimeBetweenAlerts) {
+        return false;
+      }
+    }
+
+    if (_alertsThisHour >= _alertConfig.maxAlertsPerHour) {
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _ensureInitialized() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+  }
+
+  Future<void> _handleAppActivity(AppActivity activity) async {
+    if (!_isProtectionActive) return;
+
+    try {
+      if (activity.type != ActivityType.messageReceived &&
+          activity.type != ActivityType.messageDisplayed) {
+        return;
+      }
+
+      final textContent = activity.textContent;
+      if (textContent == null || textContent.isEmpty) {
+        return;
+      }
+
+      final contactId = _generateContactId(activity);
+
+      await analyzeMessage(
+        message: textContent,
+        contactId: contactId,
+        appPackage: activity.packageName,
+      );
+    } catch (e) {
+      developer.log('Error handling app activity: $e', name: _logTag, error: e);
+    }
+  }
+
+  Future<void> _handleThreatDetected(DetectionResult result) async {
+    _threatsDetected++;
+
+    if (!_shouldShowAlert(result)) {
+      developer.log('Alert suppressed due to limits or quiet period',
+          name: _logTag);
+      return;
+    }
+
+    _recentAlerts.add(result);
+
+    if (_recentAlerts.length > 100) {
+      _recentAlerts.removeAt(0);
+    }
+
+    _lastAlertTime = DateTime.now();
+    _alertsThisHour++;
+
+    _alertController.add(result);
+
+    developer.log('Threat detected and alert emitted: ${result.reason}',
+        name: _logTag);
+  }
+
+  /// Dispose resources
+  @override
+  void dispose() {
+    _alertLimitResetTimer?.cancel();
+    if (_isInitialized) {
+      _channelMonitor.dispose();
+    }
+    _alertController.close();
+    _statsController.close();
+    _client.close();
+    super.dispose();
+  }
+}

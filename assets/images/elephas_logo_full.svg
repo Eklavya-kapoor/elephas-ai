@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="256" viewBox="0 0 1024 256">
+  <!-- Background -->
+  <rect width="1024" height="256" fill="#6750A4" rx="10" ry="10" />
+  
+  <!-- Elephant Icon -->
+  <g transform="translate(80, 30) scale(0.75)">
+    <circle cx="120" cy="120" r="90" fill="#EAE0FF" />
+    <path d="M170,80 C200,85 215,110 210,140 C205,170 195,180 180,190 
+             C150,205 125,200 100,185 C75,170 65,145 70,115 
+             C75,85 95,65 125,60 C155,55 170,70 170,80 Z" 
+          fill="#6750A4" />
+    <!-- Trunk -->
+    <path d="M160,130 C165,140 170,150 165,160 C160,170 150,175 140,180 
+             C130,185 120,180 115,175" 
+          stroke="#EAE0FF" stroke-width="12" fill="none" />
+    <!-- Tusks -->
+    <path d="M135,145 L145,160" stroke="white" stroke-width="5" />
+    <path d="M155,145 L165,160" stroke="white" stroke-width="5" />
+    <!-- Eye -->
+    <circle cx="135" cy="105" r="5" fill="white" />
+  </g>
+  
+  <!-- Text -->
+  <text x="280" y="145" font-family="Arial" font-size="80" font-weight="bold" fill="#FFFFFF">ELEPHAS AI</text>
+  <text x="280" y="180" font-family="Arial" font-size="24" fill="#D0BCFF">Fraud Protection Powered by AI</text>
+</svg>

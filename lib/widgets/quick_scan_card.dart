@@ -1,9 +1,8 @@
-// widgets/quick_scan_card.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/scam_detection_service.dart';
-import '../models/alert_level.dart';
-import '../models/scam_detection_models.dart';
+import '../services/scam_detection_service.dart'; // Enhanced Elephas AI
+import '../core/models/alert_types.dart';
+import '../core/models/detection_models.dart';
 
 class QuickScanCard extends StatefulWidget {
   const QuickScanCard({super.key});
@@ -14,7 +13,15 @@ class QuickScanCard extends StatefulWidget {
 
 class QuickScanCardState extends State<QuickScanCard> {
   final TextEditingController _controller = TextEditingController();
-  ScamDetectionResult? _lastResult;
+  DetectionResult? _lastResult;
+
+  @override
+  void initState() {
+    super.initState();
+    // Add a test message for easy testing (safe message)
+    _controller.text =
+        "Hello! Hope you are doing well. Let's meet for coffee tomorrow.";
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,31 +80,35 @@ class QuickScanCardState extends State<QuickScanCard> {
     );
   }
 
-  Widget _buildResultCard(BuildContext context, ScamDetectionResult result) {
+  Widget _buildResultCard(BuildContext context, DetectionResult result) {
     final theme = Theme.of(context);
 
     Color getStatusColor() {
-      switch (result.alertLevel) {
-        case AlertLevel.critical:
+      switch (result.riskLevel) {
+        case RiskLevel.critical:
           return Colors.red;
-        case AlertLevel.high:
+        case RiskLevel.high:
           return Colors.orange;
-        case AlertLevel.medium:
+        case RiskLevel.medium:
           return Colors.yellow.shade800;
-        case AlertLevel.none:
+        case RiskLevel.low:
+          return Colors.blue;
+        case RiskLevel.minimal:
           return Colors.green;
       }
     }
 
     String getStatusEmoji() {
-      switch (result.alertLevel) {
-        case AlertLevel.critical:
+      switch (result.riskLevel) {
+        case RiskLevel.critical:
           return '🚨';
-        case AlertLevel.high:
+        case RiskLevel.high:
           return '⚠️';
-        case AlertLevel.medium:
+        case RiskLevel.medium:
           return '⚡';
-        case AlertLevel.none:
+        case RiskLevel.low:
+          return '🔍';
+        case RiskLevel.minimal:
           return '✅';
       }
     }
@@ -109,6 +120,31 @@ class QuickScanCardState extends State<QuickScanCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (result.isFallbackResult)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 38),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade700),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.hourglass_top, size: 18, color: Colors.amber.shade900),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Still calibrating — this is a quick check, not the full result. "
+                        "Try again in a minute for a confirmed answer.",
+                        style: TextStyle(fontSize: 12.5, color: Colors.amber.shade900),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Row(
               children: [
                 Text(
@@ -117,7 +153,7 @@ class QuickScanCardState extends State<QuickScanCard> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  result.isScam ? 'Scam Detected!' : 'Content is Safe',
+                  result.isThreat ? 'Threat Detected!' : 'Content is Safe',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -128,17 +164,17 @@ class QuickScanCardState extends State<QuickScanCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              result.reason,
+              result.reasoning,
               style: const TextStyle(fontSize: 16),
             ),
-            if (result.scamTypes.isNotEmpty) ...[
+            if (result.evidence?.isNotEmpty == true) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
-                children: result.scamTypes
-                    .map((type) => Chip(
-                          label: Text(type),
+                children: result.evidence!.entries
+                    .map((e) => Chip(
+                          label: Text('${e.key}: ${e.value}'),
                           backgroundColor: theme.chipTheme.backgroundColor,
                         ))
                     .toList(),
@@ -165,16 +201,43 @@ class QuickScanCardState extends State<QuickScanCard> {
         Provider.of<SmartScamDetectionService>(context, listen: false);
 
     try {
-      final result = await service.scanMessage(_controller.text.trim());
+      debugPrint(
+          '🔍 QUICK SCAN: Starting quick scan for message: ${_controller.text.trim()}');
+      final result = await service.scanMessage(
+        _controller.text.trim(),
+        packageName: 'com.elephas.ai.quickscan', // Always pass package name for context
+      );
+      debugPrint(
+          '✅ QUICK SCAN: Result - isThreat=${result.isThreat}, confidence=${result.confidence}, reasoning=${result.reasoning}');
+
       setState(() {
-        _lastResult = result;
+        _lastResult = result as DetectionResult?;
       });
 
-      if (result.isScam && result.alertLevel != AlertLevel.none) {
-        if (!mounted) return;
+      // Show appropriate snackbar based on result
+      if (!mounted) return;
+
+      if (result.isFallbackResult) {
+        // Backend is still warming up its real model - be upfront that
+        // this isn't a confirmed verdict yet, instead of a confident claim.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('⚠️ ${result.reason}'),
+            content: const Text(
+                '⏳ Still calibrating — try again in a minute for a confirmed result.'),
+            backgroundColor: Colors.amber.shade800,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      } else if (result.isThreat && result.riskLevel != RiskLevel.minimal) {
+        // Show red snackbar for scam detection
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🚨 SCAM DETECTED: ${result.reasoning}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
             action: SnackBarAction(
@@ -184,8 +247,23 @@ class QuickScanCardState extends State<QuickScanCard> {
             ),
           ),
         );
+      } else {
+        // Show green snackbar for safe message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ SAFE: ${result.reasoning}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
       }
     } catch (e) {
+      debugPrint('💥 QUICK SCAN: Error in quick scan: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

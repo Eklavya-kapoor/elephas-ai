@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Premium logo circle background with depth and shine -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Shadow layer -->
+    <item android:top="1dp" android:left="1dp">
+        <shape android:shape="oval">
+            <solid android:color="#40000000" />
+        </shape>
+    </item>
+    
+    <!-- Main white background -->
+    <item android:bottom="1dp" android:right="1dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+            <!-- Premium red border -->
+            <stroke
+                android:width="2dp"
+                android:color="#FF1744" />
+        </shape>
+    </item>
+    
+    <!-- Shine effect on top -->
+    <item android:bottom="1dp" android:right="1dp" android:top="2dp" android:left="2dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#20FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:angle="135" />
+        </shape>
+    </item>
+
+</layer-list>

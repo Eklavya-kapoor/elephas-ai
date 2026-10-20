@@ -2,54 +2,107 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/overlayRoot"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="20dp"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#FFEBEE"
-    android:elevation="8dp">
-
-    <TextView
-        android:id="@+id/alertTitle"
-        android:text="⚠️ SCAM DETECTED"
-        android:textColor="#B71C1C"
-        android:textSize="18sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/senderText"
-        android:text="From: +1234567890"
-        android:textColor="#000"
-        android:textSize="14sp"
-        android:layout_marginTop="8dp" />
-
-    <TextView
-        android:id="@+id/messageText"
-        android:text="Scam content goes here..."
-        android:textColor="#000"
-        android:textSize="14sp"
-        android:layout_marginTop="4dp" />
-
-    <TextView
-        android:id="@+id/riskLevel"
-        android:text="Risk: HIGH"
-        android:textColor="#D32F2F"
-        android:textStyle="bold"
-        android:layout_marginTop="4dp" />
+    android:background="@drawable/scam_alert_background"
+    android:elevation="20dp"
+    android:animateLayoutChanges="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="12dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/alertIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🚨"
+            android:textSize="24sp"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/alertTitle"
+            android:text="SCAM DETECTED"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/confidenceScore"
+            android:text="95%"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="@drawable/confidence_badge"
+            android:padding="4dp"
+            android:minWidth="48dp"
+            android:gravity="center" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/appName"
+        android:text="WhatsApp"
+        android:textColor="#FFCDD2"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp"
+        android:textStyle="italic" />
+
+    <TextView
+        android:id="@+id/messageText"
+        android:text="Scam content detected in your message..."
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:layout_marginTop="8dp"
+        android:maxLines="3"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/riskLevel"
+        android:text="⚠️ HIGH RISK - DO NOT CLICK LINKS"
+        android:textColor="#FFEB3B"
+        android:textStyle="bold"
+        android:textSize="14sp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/risk_badge"
+        android:padding="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="16dp"
         android:gravity="end">
 
         <Button
             android:id="@+id/dismissButton"
-            android:text="Dismiss" />
+            android:text="I Understand"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/dismiss_button"
+            android:layout_marginEnd="8dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp" />
 
         <Button
             android:id="@+id/blockButton"
-            android:text="Block"
-            android:layout_marginStart="8dp" />
+            android:text="Block Sender"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/block_button"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp" />
+
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/poweredBy"
+        android:text="Protected by Elephas AI"
+        android:textColor="#FFCDD2"
+        android:textSize="12sp"
+        android:layout_marginTop="8dp"
+        android:gravity="center" />
+
 </LinearLayout>

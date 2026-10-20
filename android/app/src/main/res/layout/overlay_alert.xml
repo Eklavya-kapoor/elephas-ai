@@ -1,38 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#FFCC0000">
+    android:layout_height="wrap_content">
 
-    <TextView
-        android:id="@+id/tvScamTitle"
+    <ImageView
+        android:id="@+id/alertImage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="SCAM ALERT"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:gravity="center" />
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:maxHeight="146dp"
+        android:contentDescription="Alert Image"/>
 
-    <TextView
-        android:id="@+id/tvScamMessage"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Suspicious content detected"
-        android:textSize="16sp"
-        android:textColor="#FFFFFF"
-        android:gravity="center" />
-
-    <Button
-        android:id="@+id/btnDismiss"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Dismiss"
-        android:textColor="#FFFFFF"
-        android:backgroundTint="#444444" />
-
-</LinearLayout>
+</FrameLayout>

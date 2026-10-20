@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.scamshield_flutter_app">
+    package="com.elephas.ai">
 
     <!-- Existing permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -11,25 +11,37 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackages" />
+
+    <!-- LIVE CALL SCAM DETECTION: New permissions -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
+    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" 
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" 
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" 
+        tools:ignore="ProtectedPermissions" />
 
 
     <application
         android:label="Elephas AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
         
         <activity
             android:name=".MainActivity"
@@ -57,20 +69,10 @@
             android:exported="true"
             android:foregroundServiceType="specialUse"
             tools:targetApi="34" >
+             <meta-data android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                 android:value="scam_protection" />
              <meta-data android:name="android.app.PROPERTY_SPECIAL_USE_PERMISSION_LABEL"
                  android:value="Your app needs to draw over other apps for scam alerts." />
-        </service>
-
-        <service
-            android:name=".NotificationListenerService"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true"
-            android:label="Elephas AI Notifications"
-            android:foregroundServiceType="remoteMessaging"
-            tools:targetApi="34">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
         </service>
 
         <service
@@ -85,7 +87,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_config" />
+                android:resource="@xml/accessibility_service_config" />
         </service>
         
         <receiver

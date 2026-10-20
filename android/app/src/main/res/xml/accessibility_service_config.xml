@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:packageNames="com.whatsapp,org.telegram.messenger,com.android.mms,com.google.android.apps.messaging,com.samsung.android.messaging,com.android.messaging"
+    android:accessibilityEventTypes="typeViewTextChanged|typeWindowContentChanged|typeWindowStateChanged|typeNotificationStateChanged|typeViewClicked|typeViewFocused|typeViewSelected|typeViewTextSelectionChanged"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews|flagRequestTouchExplorationMode|flagRequestEnhancedWebAccessibility|flagRequestFilterKeyEvents"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="50"
+    android:canRetrieveWindowContent="true"
+    android:settingsActivity="com.elephas.ai.MainActivity"
+    android:canRequestFilterKeyEvents="true"
+    android:canRequestTouchExplorationMode="true"
+    android:canPerformGestures="true"
+    android:canControlMagnification="false"
+    android:canRequestEnhancedWebAccessibility="true"/>

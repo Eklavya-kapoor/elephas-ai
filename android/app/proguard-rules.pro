@@ -22,4 +22,10 @@
 
 # Keep accessibility service classes
 -keep class * extends android.accessibilityservice.AccessibilityService
--keep class * extends android.service.notification.NotificationListenerService
+
+# Keep all app classes - MainActivity, OverlayService, OverlayPlugin, SmsReceiver,
+# BackgroundMonitorService, MethodChannelManager, etc are referenced by exact name
+# from AndroidManifest.xml and Flutter MethodChannels; renaming any of them breaks
+# the whole capture/alert pipeline with a runtime ClassNotFoundException that
+# debug builds (unminified) would never surface.
+-keep class com.elephas.ai.** { *; }

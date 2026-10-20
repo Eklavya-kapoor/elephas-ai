@@ -1,20 +1,22 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:elephas_ai/services/scam_detection_service.dart';
-import 'package:elephas_ai/services/sms_monitor_service.dart';
-import 'package:elephas_ai/services/call_monitor_service.dart';
-import 'package:elephas_ai/widgets/protection_status_card.dart';
-import 'package:elephas_ai/widgets/quick_scan_card.dart';
-import 'package:elephas_ai/widgets/stats_card.dart';
 
-// FIX: Change StatelessWidget to StatefulWidget
+import '../services/screen_monitor_service.dart';
+import '../services/overlay_service.dart';
+import '../widgets/protection_status_card.dart';
+import '../widgets/quick_scan_card.dart';
+import '../widgets/stats_card.dart';
+import '../screens/settings_screen.dart';
+import '../screens/history_screen.dart';
+
+/// Brand accent, matching the Elephas AI web presence.
+const _brandBlue = Color(0xFF2F6FAC);
+
 class HomeScreen extends StatefulWidget {
-  const HomeScreen(
-      {super.key}); // Keep this const if the constructor of HomeScreen itself is const
+  const HomeScreen({super.key});
 
   @override
-  // This is correct for a StatefulWidget
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
@@ -22,21 +24,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Ensure context is valid for Provider.of calls
-      if (mounted) {
-        final smsService =
-            Provider.of<SmsMonitorService>(context, listen: false);
-        final callService =
-            Provider.of<CallMonitorService>(context, listen: false);
-        final detectionService = Provider.of<SmartScamDetectionService>(context,
-            listen:
-                false); // Ensure this service is provided higher up in the tree
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final screenMonitor = Provider.of<ScreenMonitorService>(context, listen: false);
+      final overlay = Provider.of<OverlayService>(context, listen: false);
 
-        smsService.startMonitoring(detectionService);
-        callService.startMonitoring();
-        // You might also want to start screen monitoring here
-        // Provider.of<ScreenMonitorService>(context, listen: false).startScreenMonitoring(detectionService, Provider.of<OverlayService>(context, listen: false));
+      await screenMonitor.startMonitoring();
+      if (mounted) {
+        await overlay.checkAndRequestOverlayPermission();
       }
     });
   }
@@ -44,110 +39,133 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
-        // FIX: Remove const from AppBar title if it's dynamic (like Text('Elephas AI'))
-        // If it's static, you can keep const Text('Elephas AI')
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF131A2A),
+        elevation: 0,
+        scrolledUnderElevation: 1,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/images/elephas_icon.png',
-              height: 24,
-              width: 24,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset('assets/images/elephas_icon.png', height: 30, width: 30),
             ),
-            const SizedBox(width: 8),
-            const Text('Elephas AI'),
+            const SizedBox(width: 10),
+            const Text(
+              'Elephas AI',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ],
         ),
-        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_outlined),
+            tooltip: 'History',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const HistoryScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16), // Added const
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Now we can use const since we've added a const constructor
-            const ProtectionStatusCard(),
-            const SizedBox(height: 16), // This can remain const
-            // Using const here improves performance since QuickScanCard has a const constructor
-            const QuickScanCard(),
-            const SizedBox(height: 16), // This can remain const
-            Text(
-              // This cannot be const because it depends on Theme.of(context)
-              'Protection Statistics',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const ProtectionStatusCard(),
+              const SizedBox(height: 24),
+
+              const QuickScanCard(),
+              const SizedBox(height: 28),
+
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: _brandBlue,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-            ),
-            const SizedBox(height: 12), // This can remain const
-            // Ensure SmsMonitorService and CallMonitorService are provided in your app's widget tree
-            Consumer2<SmsMonitorService, CallMonitorService>(
-              builder: (context, smsService, callService, child) {
-                // FIX: This Column cannot be const because its children (Rows) are not const.
-                return Column(
-                  children: [
-                    // FIX: This Row cannot be const because its children (Expanded/StatsCard) are not const. (Error on line 59 likely points here due to its children)
-                    Row(
-                      children: [
-                        Expanded(
-                          // Expanded cannot be const
-                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
-                          child: StatsCard(
-                            title: 'SMS Scanned',
-                            value: smsService.totalSmsScanned
-                                .toString(), // Dynamic value
-                            icon: Icons.message,
-                            color: Colors.blue,
-                          ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Protection Statistics',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF131A2A),
                         ),
-                        const SizedBox(width: 12), // This can remain const
-                        Expanded(
-                          // Expanded cannot be const
-                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
-                          child: StatsCard(
-                            title: 'Scams Blocked',
-                            value: smsService.scamsBlocked
-                                .toString(), // Dynamic value
-                            icon: Icons.block,
-                            color: Colors.red,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              Consumer<ScreenMonitorService>(
+                builder: (context, screenMonitor, child) {
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Screens Monitored',
+                              value: screenMonitor.totalScreensMonitored.toString(),
+                              icon: Icons.screen_share,
+                              color: _brandBlue,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12), // This can remain const
-                    // FIX: This Row cannot be const because its children (Expanded/StatsCard) are not const.
-                    Row(
-                      children: [
-                        Expanded(
-                          // Expanded cannot be const
-                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
-                          child: StatsCard(
-                            title: 'Calls Monitored',
-                            value: callService.totalCallsScanned
-                                .toString(), // Dynamic value
-                            icon: Icons.phone,
-                            color: Colors.green,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Scams Detected',
+                              value: screenMonitor.scamsDetected.toString(),
+                              icon: Icons.warning_amber_rounded,
+                              color: Colors.red.shade600,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12), // This can remain const
-                        Expanded(
-                          // Expanded cannot be const
-                          // FIX: StatsCard cannot be const as its 'value' is dynamic.
-                          child: StatsCard(
-                            title: 'Suspicious Calls',
-                            value: callService.suspiciousCalls
-                                .toString(), // Dynamic value
-                            icon: Icons.warning,
-                            color: Colors.orange,
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Active Alerts',
+                              value: screenMonitor.activeAlerts.toString(),
+                              icon: Icons.notification_important_outlined,
+                              color: Colors.orange.shade700,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: StatsCard(
+                              title: 'Protection Score',
+                              value: '${screenMonitor.protectionScore.toStringAsFixed(1)}%',
+                              icon: Icons.verified_user_outlined,
+                              color: Colors.green.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

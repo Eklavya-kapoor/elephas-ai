@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AMAZING premium curved red background with gradient and shadows -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Drop shadow layer -->
+    <item android:top="2dp" android:left="2dp" android:right="2dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#40000000"
+                android:endColor="#00000000"
+                android:angle="90" />
+            <corners 
+                android:topLeftRadius="0dp"
+                android:topRightRadius="0dp"
+                android:bottomLeftRadius="20dp"
+                android:bottomRightRadius="20dp" />
+        </shape>
+    </item>
+    
+    <!-- Main premium gradient background -->
+    <item android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <!-- Premium red gradient with depth -->
+            <gradient
+                android:startColor="#FF1744"
+                android:centerColor="#F44336"
+                android:endColor="#D32F2F"
+                android:angle="135"
+                android:type="linear" />
+            
+            <!-- Curved corners -->
+            <corners 
+                android:topLeftRadius="0dp"
+                android:topRightRadius="0dp"
+                android:bottomLeftRadius="18dp"
+                android:bottomRightRadius="18dp" />
+            
+            <!-- Premium border -->
+            <stroke
+                android:width="1dp"
+                android:color="#B71C1C" />
+        </shape>
+    </item>
+    
+    <!-- Subtle highlight on top -->
+    <item android:bottom="2dp" android:top="0dp" android:left="1dp" android:right="1dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#33FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:angle="90" />
+            <corners 
+                android:topLeftRadius="0dp"
+                android:topRightRadius="0dp"
+                android:bottomLeftRadius="17dp"
+                android:bottomRightRadius="17dp" />
+        </shape>
+    </item>
+
+</layer-list>
